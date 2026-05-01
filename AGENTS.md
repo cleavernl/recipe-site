@@ -20,6 +20,10 @@ This repository is expected to be developed primarily by AI agents. Keep this fi
 - `.cursor/rules/documentation-maintenance.mdc`: keeping `.mdc` context current.
 - `.cursor/rules/decision-records.mdc`: durable technical decision notes.
 
+## Current Scoped Rules
+
+- `.cursor/rules/django-recipe-app.mdc`: Django app architecture, privacy defaults, permissions, and tooling.
+
 ## Project Posture
 
 - Do not assume a framework, runtime, package manager, database, deployment target, or hosting model until it has been explicitly chosen.

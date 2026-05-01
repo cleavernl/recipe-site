@@ -1,0 +1,16 @@
+---
+description: Django recipe app conventions and current architecture
+globs: "**/*.py,**/*.html,pyproject.toml,compose.yaml,Containerfile,scripts/*.sh"
+alwaysApply: false
+---
+
+# Django Recipe App
+
+- The app is a server-rendered Django site under `src/` with `accounts` for invite-code signup and `recipes` for recipe content, comments, and ratings.
+- Keep recipe content private by default. Recipe browsing, details, print pages, comments, ratings, and recipe mutations should require authentication unless a future decision record explicitly changes that.
+- Preserve owner/staff edit permissions for recipes. Other authenticated users may view, comment, and rate.
+- Use `uv` for Python dependency management and rootless Podman Compose for self-hosting. The first deployment target is SQLite plus local uploaded media volumes.
+- Source `scripts/project-env.sh` before local `uv`, Python, test, or management commands so tooling stays inside `recipe-site-home`.
+- Keep `scripts/start-web.sh` as the shared local startup script and container entrypoint for deployed pods.
+- Do not add external recipe scraping/import dependencies until the robust importer is intentionally designed. Store `source_url` as the MVP import placeholder.
+- Add or update Django tests for invite access, permission behavior, form workflows, and user-facing recipe changes.

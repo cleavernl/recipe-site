@@ -5,9 +5,13 @@ alwaysApply: true
 
 # Environment Isolation
 
-- Treat the Cursor shell environment as the isolated development environment for this repository unless proven otherwise.
-- Package installs, dependency setup, development commands, builds, tests, services, and git commands may run inside the Cursor shell environment.
-- Repository file edits are normal workspace changes; this rule is about avoiding unintended host OS changes.
-- Do not install host packages, change host configuration, start host-level services, modify system files, or otherwise affect the host OS without explicit user permission.
-- If a task requires leaving the Cursor shell environment or touching the real host OS, explain why and ask first.
-- If the execution environment changes, verify where commands are running before installing packages or changing configuration.
+- Cursor runs inside a distrobox, but distrobox shares enough host state that `$HOME`, XDG directories, user-level tool installs, caches, sockets, and config can affect the host OS and other distroboxes.
+- The distrobox environment itself is available for normal development use. The isolation concern is only the parts of the distrobox that reach back into the host OS or other shared distroboxes.
+- Treat `/home/cleavernl/Software/recipe-site-home` as the isolated home for this project. The repository lives at `/home/cleavernl/Software/recipe-site-home/recipe-site`.
+- Before running project commands, source `scripts/project-env.sh` or set equivalent environment variables so `HOME`, XDG paths, `PYTHONUSERBASE`, `UV_CACHE_DIR`, `PIP_CACHE_DIR`, and container CLI config point inside `recipe-site-home`.
+- Install project tools such as `uv`, language runtimes, package caches, virtualenvs, container storage/config, and generated config inside `recipe-site-home`, not `/home/cleavernl`.
+- Package installs, dependency setup, development commands, builds, tests, and services may use distrobox-local state freely. Isolate home/cache/config paths only when a command would otherwise write through shared host-facing locations such as `$HOME`, XDG paths, user install prefixes, sockets, or container CLI config.
+- Repository file edits are normal workspace changes; this rule is about avoiding unintended host OS or cross-distrobox effects.
+- Do not install host packages, change host configuration, start host-level services, modify shared user config, or write to the real `/home/cleavernl` without explicit user permission.
+- If a task requires leaving `recipe-site-home` or touching shared host/distrobox state, explain why and ask first.
+- If the execution environment changes, verify `pwd`, `HOME`, and XDG paths before installing packages or changing configuration.
