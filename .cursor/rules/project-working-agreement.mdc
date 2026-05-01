@@ -1,0 +1,15 @@
+---
+description: Always follow the repository working agreement
+alwaysApply: true
+---
+
+# Project Working Agreement
+
+- Use `AGENTS.md` as the project rule index; rely on focused `.mdc` files for detailed active guidance.
+- Do not assume a tech stack, package manager, database, hosting target, or app architecture until it is explicitly chosen.
+- Keep changes small, focused, and consistent with existing repository conventions.
+- Ask before making decisions that affect architecture, dependencies, data models, persistence, deployment, or user experience.
+- Escalate before irreversible or high-impact actions such as destructive data changes, production-affecting operations, external service setup, paid services, credential handling, schema migrations, auth model changes, or host OS changes.
+- Preserve user work. Never discard or overwrite changes you did not make unless the user asks.
+- After creating new files, call out their paths for the user.
+- This code is not intended to be human-first; prefer syntax and organization that future agents can navigate and reason about reliably.

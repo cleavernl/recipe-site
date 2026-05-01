@@ -1,0 +1,13 @@
+---
+description: Workflow for highly autonomous agent-led development
+alwaysApply: true
+---
+
+# Autonomous Development
+
+- Make autonomous work auditable: state the plan, make scoped changes, verify them, and report the result.
+- Read relevant code and applicable `.mdc` rules before deciding how to implement.
+- Prefer incremental changes that leave the repository working after each meaningful step.
+- When requirements are ambiguous, choose the smallest reversible path or ask if the choice affects architecture, data, security, cost, deployment, or user experience.
+- Do not hide uncertainty. Call out assumptions, skipped checks, failed checks, and residual risk.
+- Preserve continuity for future agents by updating rules, decision records, tests, and setup notes when the work creates new context.

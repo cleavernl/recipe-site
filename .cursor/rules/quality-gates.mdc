@@ -1,0 +1,13 @@
+---
+description: Verification expectations before work is considered complete
+alwaysApply: true
+---
+
+# Quality Gates
+
+- Treat tests, linting, type checks, builds, and security checks as part of the change, not optional cleanup.
+- Run the smallest useful verification first, then broader checks when shared behavior, user flows, or infrastructure are affected.
+- Add or update automated tests for bug fixes, user-facing behavior, data transformations, permission checks, and shared utilities.
+- Keep verification commands runnable inside the Cursor shell environment and document new commands when they are introduced.
+- Do not claim verification passed unless it was actually run. If a check cannot run, explain why and name the remaining risk.
+- Prefer deterministic checks and fixtures over manual-only validation for behavior future agents may change.

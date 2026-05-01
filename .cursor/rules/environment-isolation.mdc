@@ -1,0 +1,13 @@
+---
+description: Keep development commands isolated from the host OS
+alwaysApply: true
+---
+
+# Environment Isolation
+
+- Treat the Cursor shell environment as the isolated development environment for this repository unless proven otherwise.
+- Package installs, dependency setup, development commands, builds, tests, services, and git commands may run inside the Cursor shell environment.
+- Repository file edits are normal workspace changes; this rule is about avoiding unintended host OS changes.
+- Do not install host packages, change host configuration, start host-level services, modify system files, or otherwise affect the host OS without explicit user permission.
+- If a task requires leaving the Cursor shell environment or touching the real host OS, explain why and ask first.
+- If the execution environment changes, verify where commands are running before installing packages or changing configuration.

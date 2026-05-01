@@ -1,0 +1,13 @@
+---
+description: Keep contextual Cursor rule documentation current
+alwaysApply: true
+---
+
+# Documentation Maintenance
+
+- Before working in an area, check for relevant `.mdc` rules and use them as local context.
+- When code changes introduce or alter important context, update `.cursor/rules/*.mdc` in the same change.
+- Document architecture, conventions, workflows, data shapes, security assumptions, environment setup, and non-obvious constraints that future agents need.
+- Use `globs` for subsystem, language, or directory-specific guidance. Use `alwaysApply: true` only for guidance that applies to every task.
+- Keep rule files concise and actionable. Prefer concrete instructions over broad advice.
+- Remove or revise stale `.mdc` guidance when related code changes make it inaccurate.

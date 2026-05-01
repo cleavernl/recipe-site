@@ -1,0 +1,12 @@
+---
+description: Record durable technical decisions as the project evolves
+alwaysApply: true
+---
+
+# Decision Records
+
+- Record decisions that affect architecture, dependencies, data ownership, security posture, deployment, or future agent behavior.
+- Use lightweight decision records: context, decision, consequences, and date are enough.
+- Prefer one durable decision record over scattering the same rationale across comments, chat summaries, and ad hoc notes.
+- Update or supersede old decisions when reality changes. Do not leave conflicting guidance unaddressed.
+- If a decision is still tentative, label it as tentative and state what would make it final.

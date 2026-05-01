@@ -1,0 +1,16 @@
+---
+description: Secure coding and privacy expectations
+alwaysApply: true
+---
+
+# Security And Privacy
+
+- Treat user data, credentials, deployment tokens, and local environment details as private by default.
+- Keep secrets out of source control, examples, logs, errors, telemetry, fixtures, and client-visible responses.
+- Write generated code with secure defaults; do not introduce known vulnerable patterns for convenience.
+- Validate and normalize external input at trust boundaries before persistence, rendering, command execution, file access, or network requests.
+- Prefer parameterized queries, framework escaping, safe serializers, and allowlists over string concatenation or blacklist filtering.
+- Keep authentication, authorization, session handling, and permission checks explicit and server-enforced.
+- Use least-privilege defaults for files, services, credentials, database access, and third-party integrations.
+- Treat new dependencies as attack-surface changes; consider maintenance, vulnerabilities, and transitive risk before adding them.
+- For security-sensitive changes, include focused tests or verification notes covering likely abuse cases.

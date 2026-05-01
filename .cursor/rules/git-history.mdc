@@ -1,0 +1,16 @@
+---
+description: Maintain clean git history with automated feature-boundary commits
+alwaysApply: true
+---
+
+# Git History
+
+- Commit at natural handoff points: after a reviewed feature, fix, setup step, or implementation is confirmed, or when the user indicates we are moving on.
+- Treat that confirmation or move-on direction as permission to commit the completed unit unless the user says not to.
+- If uncertain whether a commit should be made, ask the user. Asking too often about commits is better than asking too rarely.
+- Keep commits atomic. Stage only files that belong to the completed unit and leave unrelated user changes unstaged.
+- Before committing, inspect status, staged changes, unstaged changes, untracked files, and recent commit style.
+- Use concise commit messages that describe the purpose and outcome of the change.
+- Do not create WIP commits unless the user explicitly asks.
+- Do not commit secrets, credentials, local environment files, or generated noise.
+- Do not amend, rebase, reset, or push unless the user explicitly asks.
