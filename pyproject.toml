@@ -1,0 +1,41 @@
+[project]
+name = "recipe-site"
+version = "0.1.0"
+description = "A private recipe sharing site for friends and family."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.0,<6.0",
+    "gunicorn>=22.0",
+    "pillow>=10.0",
+    "whitenoise>=6.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["src"]
+testpaths = ["src"]
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B904"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -1,0 +1,37 @@
+<article class="recipe-card">
+  <a class="recipe-card-link" href="{{ recipe.get_absolute_url }}" aria-label="View {{ recipe.title }}">
+    {% if recipe.photo or recipe.photos.first %}
+      <section class="recipe-card-media recipe-tile-carousel" data-recipe-carousel>
+        <div class="recipe-carousel-track">
+          {% if recipe.photo %}
+            <figure class="recipe-carousel-slide is-active" data-carousel-slide>
+              <img src="{{ recipe.photo.url }}" alt="">
+            </figure>
+          {% endif %}
+          {% for photo in recipe.photos.all %}
+            <figure class="recipe-carousel-slide{% if not recipe.photo and forloop.first %} is-active{% endif %}" data-carousel-slide>
+              <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" loading="lazy" decoding="async">
+            </figure>
+          {% endfor %}
+        </div>
+        {% if recipe.photo and recipe.photos.first or recipe.photos.count > 1 %}
+          <div class="carousel-controls">
+            <button class="icon-button" type="button" data-carousel-prev aria-label="Previous photo">‹</button>
+            <button class="icon-button" type="button" data-carousel-next aria-label="Next photo">›</button>
+          </div>
+        {% endif %}
+      </section>
+    {% else %}
+      <div class="recipe-card-media recipe-card-media-empty"><span>No photo yet</span></div>
+    {% endif %}
+    <div class="recipe-card-body">
+      <h2>{{ recipe.title }}</h2>
+      {% if recipe.description %}<p>{{ recipe.description|truncatewords:24 }}</p>{% endif %}
+      <dl class="meta-list">
+        {% if recipe.total_time_minutes %}<div><dt>Total</dt><dd>{{ recipe.total_time_minutes }} min</dd></div>{% endif %}
+        {% if recipe.servings %}<div><dt>Serves</dt><dd>{{ recipe.servings }}</dd></div>{% endif %}
+        <div><dt>Rating</dt><dd>{% if recipe.average_rating %}{{ recipe.average_rating|floatformat:1 }} ★ ({{ recipe.rating_count }}){% else %}New{% endif %}</dd></div>
+      </dl>
+    </div>
+  </a>
+</article>

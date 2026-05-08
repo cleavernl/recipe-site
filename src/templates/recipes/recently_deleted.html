@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Recently deleted - Family Recipes{% endblock %}
+
+{% block content %}
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Recently deleted</p>
+      <h1>Deleted recipes</h1>
+      <p>Recipes stay here for one week after deletion, then they are permanently removed.</p>
+    </div>
+    <a class="button secondary" href="{% url 'recipes:list' %}">Back to recipes</a>
+  </section>
+
+  <section class="recipe-grid">
+    {% for recipe in recipes %}
+      {% include "recipes/_recipe_card.html" %}
+    {% empty %}
+      <div class="empty-state">
+        <h2>No recently deleted recipes</h2>
+        <p>Deleted recipes will appear here before they are permanently removed.</p>
+      </div>
+    {% endfor %}
+  </section>
+{% endblock %}

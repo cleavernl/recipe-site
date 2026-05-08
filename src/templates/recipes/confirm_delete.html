@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ object.title }} - Family Recipes{% endblock %}
+
+{% block content %}
+  <section class="narrow-card">
+    <p class="eyebrow">Confirm deletion</p>
+    <h1>Delete {{ object.title }}?</h1>
+    <p>This moves the recipe to recently deleted. It will be permanently removed after one week.</p>
+    <form class="actions form-actions" method="post">
+      {% csrf_token %}
+      <button class="danger" type="submit">Delete recipe</button>
+      <a class="button secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    </form>
+  </section>
+{% endblock %}

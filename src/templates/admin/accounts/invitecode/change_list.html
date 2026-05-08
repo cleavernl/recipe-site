@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% load admin_urls %}
+
+{% block object-tools-items %}
+  <li>
+    <form method="post" action="{% url 'admin:accounts_invitecode_quick_24h' %}">
+      {% csrf_token %}
+      <button class="addlink" type="submit">New 24-hour invite</button>
+    </form>
+  </li>
+  {{ block.super }}
+{% endblock %}

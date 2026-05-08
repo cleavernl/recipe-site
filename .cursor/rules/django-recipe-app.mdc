@@ -11,6 +11,7 @@ alwaysApply: false
 - Preserve owner/staff edit permissions for recipes. Other authenticated users may view, comment, and rate.
 - Use `uv` for Python dependency management and rootless Podman Compose for self-hosting. The first deployment target is SQLite plus local uploaded media volumes.
 - Source `scripts/project-env.sh` before local `uv`, Python, test, or management commands so tooling stays inside `recipe-site-home`.
+- When a change creates or modifies migrations, run the needed `uv run python manage.py migrate` command before handing the feature back, unless the user explicitly asks not to touch the local database.
 - Keep `scripts/start-web.sh` as the shared local startup script and container entrypoint for deployed pods.
 - Do not add external recipe scraping/import dependencies until the robust importer is intentionally designed. Store `source_url` as the MVP import placeholder.
 - Add or update Django tests for invite access, permission behavior, form workflows, and user-facing recipe changes.

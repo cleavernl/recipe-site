@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}{{ recipe.title }} - Family Recipes{% endblock %}
+
+{% block content %}
+  <article class="recipe-detail">
+    {% if recipe.deleted_at %}
+      <div class="deleted-banner">
+        <strong>Recently deleted.</strong>
+        This recipe can be restored until one week after deletion.
+        <form method="post" action="{% url 'recipes:restore' recipe.slug %}">
+          {% csrf_token %}
+          <button class="button secondary" type="submit">Restore recipe</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <header class="recipe-header">
+      <div class="recipe-header-top">
+        <div class="recipe-title-meta">
+          <a class="button secondary icon-only-button" href="{% url 'recipes:list' %}" aria-label="Back to recipes">←</a>
+          <p class="eyebrow">Shared by {% if recipe.owner %}{{ recipe.owner.get_full_name|default:recipe.owner.username }}{% else %}a former member{% endif %}</p>
+        </div>
+        <div class="actions">
+          <button class="button secondary" type="button" data-print-recipe>Print</button>
+          {% if not recipe.deleted_at and can_edit %}
+            <a class="button secondary" href="{% url 'recipes:update' recipe.slug %}">Edit</a>
+          {% endif %}
+          {% if not recipe.deleted_at %}
+            <a class="button danger" href="{% url 'recipes:delete' recipe.slug %}">Delete</a>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <h1>{{ recipe.title }}</h1>
+        {% if recipe.description %}<p class="lede">{{ recipe.description }}</p>{% endif %}
+      </div>
+    </header>
+
+    {% if recipe.photo %}
+      <img class="hero-photo" src="{{ recipe.photo.url }}" alt="">
+    {% endif %}
+
+    {% if recipe.photos.all %}
+      <section class="photo-gallery" aria-label="Recipe photos">
+        {% for photo in recipe.photos.all %}
+          <figure>
+            <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" loading="lazy" decoding="async">
+            {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
+          </figure>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    <dl class="meta-list large">
+      {% if recipe.prep_time_minutes %}<div><dt>Prep</dt><dd>{{ recipe.prep_time_minutes }} min</dd></div>{% endif %}
+      {% if recipe.cook_time_minutes %}<div><dt>Cook</dt><dd>{{ recipe.cook_time_minutes }} min</dd></div>{% endif %}
+      {% if recipe.total_time_minutes %}<div><dt>Total</dt><dd>{{ recipe.total_time_minutes }} min</dd></div>{% endif %}
+      {% if recipe.servings %}<div><dt>Serves</dt><dd>{{ recipe.servings }}</dd></div>{% endif %}
+      <div>
+        <dt>Rating</dt>
+        <dd data-rating-summary>
+          {% if recipe.average_rating %}{{ recipe.average_rating|floatformat:1 }} ★ ({{ recipe.rating_count }}){% else %}Not rated{% endif %}
+        </dd>
+      </div>
+    </dl>
+
+    {% if recipe.source_url %}
+      <p class="source-link">Source: <a href="{{ recipe.source_url }}" rel="noopener noreferrer">{{ recipe.source_url }}</a></p>
+    {% endif %}
+
+    <div class="recipe-cook-layout" aria-label="Cooking instructions">
+      <section class="cook-card ingredient-card">
+        <div class="cook-card-header">
+          <p class="eyebrow">Gather</p>
+          <h2>Ingredients</h2>
+        </div>
+        <ul class="ingredient-list">
+          {% for ingredient in recipe.ingredients.all %}
+            <li{% if ingredient.has_unitless_quantity or not ingredient.quantity %} class="ingredient-list-full{% if ingredient.has_unitless_quantity %} ingredient-list-unitless{% endif %}"{% endif %}>
+              {% if ingredient.quantity and not ingredient.has_unitless_quantity %}
+                <span class="ingredient-quantity">{{ ingredient.quantity }}</span>
+                <span class="ingredient-name">
+                  {{ ingredient.name }}
+                  {% if ingredient.notes %}<small>{{ ingredient.notes }}</small>{% endif %}
+                </span>
+              {% else %}
+                <span class="ingredient-name">
+                  {% if ingredient.quantity %}<strong>{{ ingredient.quantity }}</strong>{% endif %}
+                  {% if ingredient.quantity %} {% endif %}
+                  {{ ingredient.name }}
+                </span>
+                {% if ingredient.notes %}<small class="ingredient-note">{{ ingredient.notes }}</small>{% endif %}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="cook-card instruction-card">
+        <div class="cook-card-header">
+          <p class="eyebrow">Cook</p>
+          <h2>Instructions</h2>
+        </div>
+        <ol class="step-list">
+          {% for step in recipe.steps.all %}
+            <li>{{ step.text|linebreaksbr }}</li>
+          {% endfor %}
+        </ol>
+      </section>
+    </div>
+  </article>
+
+  <section class="discussion" id="discussion">
+    <h2>Ratings and comments</h2>
+    <div class="rating-panel">
+      <div class="rating-overview-stack">
+        <section class="rating-card">
+          <div class="rating-section-header">
+            <h3>Your rating</h3>
+            <p>Tap a star to update your score.</p>
+          </div>
+          <form class="rating-form star-rating-form" method="post" action="{% url 'recipes:rate' recipe.slug %}#discussion">
+            {% csrf_token %}
+            <div class="star-rating-field" role="radiogroup" aria-label="Recipe rating">
+              {% for radio in rating_form.value %}
+                <span class="star-choice">
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}" title="{{ radio.choice_label }}">
+                    <span aria-hidden="true">★</span>
+                    <span class="sr-only">{{ radio.choice_label }}</span>
+                  </label>
+                </span>
+              {% endfor %}
+            </div>
+            <noscript><button type="submit">Save rating</button></noscript>
+          </form>
+        </section>
+
+        <section class="rating-card">
+          <div class="rating-section-header">
+            <h3>Overall rating</h3>
+            <p>Average from everyone who has rated this recipe.</p>
+          </div>
+          <div class="average-rating">
+            <span
+              class="star-meter average-star-meter"
+              data-average-star-meter
+              style="--rating-percent: {{ average_rating_percent }}%;"
+              aria-label="{% if recipe.average_rating %}{{ recipe.average_rating|floatformat:1 }} out of 5 stars{% else %}No ratings yet{% endif %}"
+            >
+              <span class="star-meter-empty" aria-hidden="true">★★★★★</span>
+              <span class="star-meter-fill" aria-hidden="true">★★★★★</span>
+            </span>
+            <span data-rating-average>
+              {% if recipe.average_rating %}{{ recipe.average_rating|floatformat:1 }} out of 5{% else %}Not rated{% endif %}
+            </span>
+            <span class="formset-help" data-rating-count>
+              {% if recipe.rating_count %}
+                {{ recipe.rating_count }} review{{ recipe.rating_count|pluralize }}
+              {% else %}
+                No reviews yet
+              {% endif %}
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <section class="rating-card reviewer-card">
+        <div class="rating-section-header">
+          <h3>Reviewers</h3>
+          <p>Most recent ratings.</p>
+        </div>
+        <div class="reviewer-list" data-rating-breakdown>
+          {% if recipe.rating_count %}
+            <ul data-rating-breakdown-list>
+              {% for rating in ratings %}
+                <li data-rating-user-id="{{ rating.user_id }}">
+                  <span data-rating-reviewer-name>{{ rating.user_name }}{% if rating.is_current_user %} <span class="reviewer-you">(you)</span>{% endif %}</span>
+                  <strong
+                    class="star-meter reviewer-stars"
+                    style="--rating-percent: {{ rating.value_percent }}%;"
+                    aria-label="{{ rating.value }} out of 5 stars"
+                  >
+                    <span class="star-meter-empty" aria-hidden="true">★★★★★</span>
+                    <span class="star-meter-fill" aria-hidden="true">★★★★★</span>
+                  </strong>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p data-rating-empty>No one has rated this recipe yet.</p>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div class="comments-header">
+      <h2>Comments</h2>
+      <div class="comment-sort" aria-label="Comment sort order">
+        <a class="{% if comment_sort == 'oldest' %}is-active{% endif %}" href="?comments=oldest#discussion" data-comment-sort="oldest">Oldest first</a>
+        <a class="{% if comment_sort == 'newest' %}is-active{% endif %}" href="?comments=newest#discussion" data-comment-sort="newest">Newest first</a>
+      </div>
+    </div>
+    <div data-comments-list>
+      {% for comment in comments %}
+        <article
+          class="comment"
+          data-comment-created-at="{{ comment.created_at|date:'c' }}"
+          data-comment-id="{{ comment.id }}"
+        >
+          <div class="comment-body">
+            <p>{{ comment.body|linebreaksbr }}</p>
+          </div>
+          <footer class="comment-meta">
+            <strong>{{ comment.author_name }}</strong>
+            <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time>
+          </footer>
+        </article>
+      {% empty %}
+        <p>No comments yet.</p>
+      {% endfor %}
+    </div>
+
+    <form id="comment-form" method="post" action="{% url 'recipes:comment' recipe.slug %}">
+      {% csrf_token %}
+      <p>
+        <label class="sr-only" for="{{ comment_form.body.id_for_label }}">Comment</label>
+        {{ comment_form.body }}
+        {{ comment_form.body.errors }}
+      </p>
+      <div class="actions">
+        <button type="submit">Add comment</button>
+      </div>
+    </form>
+  </section>
+{% endblock %}

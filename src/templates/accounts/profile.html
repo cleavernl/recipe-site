@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Family Recipes{% endblock %}
+
+{% block content %}
+  <section class="narrow-card">
+    <p class="eyebrow">Profile</p>
+    <h1>Your account</h1>
+    <p class="lede">Update your personal details for comments, ratings, and recipe history.</p>
+
+    <div class="profile-summary">
+      <p><strong>Username:</strong> {{ user.username }}</p>
+    </div>
+
+    <div class="actions">
+      <a class="button secondary" href="{% url 'password_change' %}">Change password</a>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions form-actions">
+        <button type="submit">Save profile</button>
+      </div>
+    </form>
+  </section>
+{% endblock %}

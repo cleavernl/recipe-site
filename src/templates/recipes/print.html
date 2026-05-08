@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ recipe.title }} - Print</title>
+  <style>
+    body { color: #1f2933; font-family: Georgia, serif; line-height: 1.5; margin: 2rem auto; max-width: 760px; }
+    h1, h2 { font-family: system-ui, sans-serif; }
+    img { max-width: 280px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 1rem; padding: 0; }
+    .meta li { list-style: none; }
+    @media print { a[href]::after { content: ""; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{{ recipe.title }}</h1>
+    {% if recipe.description %}<p>{{ recipe.description }}</p>{% endif %}
+    {% if recipe.photo %}<img src="{{ recipe.photo.url }}" alt="">{% endif %}
+    <ul class="meta">
+      {% if recipe.prep_time_minutes %}<li><strong>Prep:</strong> {{ recipe.prep_time_minutes }} min</li>{% endif %}
+      {% if recipe.cook_time_minutes %}<li><strong>Cook:</strong> {{ recipe.cook_time_minutes }} min</li>{% endif %}
+      {% if recipe.total_time_minutes %}<li><strong>Total:</strong> {{ recipe.total_time_minutes }} min</li>{% endif %}
+      {% if recipe.servings %}<li><strong>Serves:</strong> {{ recipe.servings }}</li>{% endif %}
+    </ul>
+
+    <h2>Ingredients</h2>
+    <ul>
+      {% for ingredient in recipe.ingredients.all %}
+        <li>
+          {% if ingredient.quantity %}{{ ingredient.quantity }} {% endif %}
+          {{ ingredient.name }}
+          {% if ingredient.notes %}({{ ingredient.notes }}){% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <h2>Instructions</h2>
+    <ol>
+      {% for step in recipe.steps.all %}
+        <li>{{ step.text|linebreaksbr }}</li>
+      {% endfor %}
+    </ol>
+
+    {% if recipe.source_url %}<p><strong>Source:</strong> {{ recipe.source_url }}</p>{% endif %}
+  </main>
+  <script>window.addEventListener("load", () => window.print());</script>
+</body>
+</html>

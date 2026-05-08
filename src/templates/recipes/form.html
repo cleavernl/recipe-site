@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}{% if recipe.pk %}Edit{% else %}Add{% endif %} recipe - Family Recipes{% endblock %}
+
+{% block content %}
+  <section class="wide-card">
+    <div class="form-title-row">
+      <a
+        class="button secondary icon-only-button"
+        href="{% if recipe.pk %}{{ recipe.get_absolute_url }}{% else %}{% url 'recipes:list' %}{% endif %}"
+        aria-label="{% if recipe.pk %}Back to recipe{% else %}Back to recipes{% endif %}"
+      >←</a>
+      <h1>{% if recipe.pk %}Edit {{ recipe.title }}{% else %}Add a recipe{% endif %}</h1>
+    </div>
+    <p class="lede">Capture the details future-you will want: timing, servings, ingredients, and the steps that make it work.</p>
+    <form method="post" enctype="multipart/form-data" data-unsaved-warning>
+      {% csrf_token %}
+      {{ recipe_form.non_field_errors }}
+      <p>
+        {{ recipe_form.title.label_tag }}
+        {{ recipe_form.title }}
+        {{ recipe_form.title.errors }}
+      </p>
+      <p>
+        {{ recipe_form.description.label_tag }}
+        {{ recipe_form.description }}
+        {{ recipe_form.description.errors }}
+      </p>
+      <div class="time-row">
+        <p>
+          {{ recipe_form.prep_time_minutes.label_tag }}
+          {{ recipe_form.prep_time_minutes }}
+          {{ recipe_form.prep_time_minutes.errors }}
+        </p>
+        <p>
+          {{ recipe_form.cook_time_minutes.label_tag }}
+          {{ recipe_form.cook_time_minutes }}
+          {{ recipe_form.cook_time_minutes.errors }}
+        </p>
+      </div>
+      <p>
+        {{ recipe_form.servings.label_tag }}
+        {{ recipe_form.servings }}
+        {{ recipe_form.servings.errors }}
+      </p>
+      <p>
+        {{ recipe_form.source_url.label_tag }}
+        {{ recipe_form.source_url }}
+        {{ recipe_form.source_url.errors }}
+      </p>
+
+      <section class="formset dynamic-formset" data-formset data-remove-label="Photo">
+        <div class="formset-heading">
+          <h2>Photos</h2>
+        </div>
+        <p class="formset-help">Add more photos for the gallery on the recipe page.</p>
+        {{ photo_formset.management_form }}
+        <div class="formset-columns photo-columns" aria-hidden="true">
+          <span>Image</span>
+          <span>Caption</span>
+          <span></span>
+        </div>
+        <div class="formset-rows" data-formset-rows>
+          {% for form in photo_formset %}
+          <div class="form-row photo-row" data-form-row>
+            {{ form.id }}
+            {{ form.non_field_errors }}
+            {{ form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ form.image.id_for_label }}">Image</label>
+              {{ form.image }}
+              {{ form.image.errors }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ form.caption.id_for_label }}">Caption</label>
+              {{ form.caption }}
+              {{ form.caption.errors }}
+            </div>
+            {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove photo">×</button>
+          </div>
+          {% endfor %}
+        </div>
+        <template data-formset-template>
+          <div class="form-row photo-row" data-form-row>
+            {{ photo_formset.empty_form.id }}
+            {{ photo_formset.empty_form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ photo_formset.empty_form.image.id_for_label }}">Image</label>
+              {{ photo_formset.empty_form.image }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ photo_formset.empty_form.caption.id_for_label }}">Caption</label>
+              {{ photo_formset.empty_form.caption }}
+            </div>
+            {% if photo_formset.empty_form.DELETE %}{{ photo_formset.empty_form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove photo">×</button>
+          </div>
+        </template>
+        <div class="formset-add-row">
+          <button class="icon-button" type="button" data-formset-add aria-label="Add photo">+</button>
+        </div>
+      </section>
+
+      <section class="formset dynamic-formset" data-formset data-remove-label="Ingredient" data-sortable="ingredients">
+        <div class="formset-heading">
+          <h2>Ingredients</h2>
+        </div>
+        <p class="formset-help">Add each ingredient on its own row.</p>
+        {{ ingredient_formset.management_form }}
+        <div class="formset-columns ingredient-columns" aria-hidden="true">
+          <span>Ingredient</span>
+          <span>Quantity</span>
+          <span>Notes</span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="formset-rows" data-formset-rows>
+          {% for form in ingredient_formset %}
+          <div class="form-row ingredient-row" data-form-row>
+            {{ form.id }}
+            {{ form.non_field_errors }}
+            {{ form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ form.name.id_for_label }}">Ingredient</label>
+              {{ form.name }}
+              {{ form.name.errors }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ form.quantity.id_for_label }}">Quantity</label>
+              {{ form.quantity }}
+              {{ form.quantity.errors }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ form.notes.id_for_label }}">Notes</label>
+              {{ form.notes }}
+              {{ form.notes.errors }}
+            </div>
+            <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
+            {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+          </div>
+          {% endfor %}
+        </div>
+        <template data-formset-template>
+          <div class="form-row ingredient-row" data-form-row>
+            {{ ingredient_formset.empty_form.id }}
+            {{ ingredient_formset.empty_form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ ingredient_formset.empty_form.name.id_for_label }}">Ingredient</label>
+              {{ ingredient_formset.empty_form.name }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ ingredient_formset.empty_form.quantity.id_for_label }}">Quantity</label>
+              {{ ingredient_formset.empty_form.quantity }}
+            </div>
+            <div>
+              <label class="sr-only" for="{{ ingredient_formset.empty_form.notes.id_for_label }}">Notes</label>
+              {{ ingredient_formset.empty_form.notes }}
+            </div>
+            <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
+            {% if ingredient_formset.empty_form.DELETE %}{{ ingredient_formset.empty_form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+          </div>
+        </template>
+        <div class="formset-add-row">
+          <button class="icon-button" type="button" data-formset-add aria-label="Add ingredient">+</button>
+        </div>
+      </section>
+
+      <section class="formset dynamic-formset" data-formset data-remove-label="Instruction">
+        <div class="formset-heading">
+          <h2>Instructions</h2>
+        </div>
+        <p class="formset-help">Add steps in the order someone should follow them.</p>
+        {{ step_formset.management_form }}
+        <div class="formset-columns step-columns" aria-hidden="true">
+          <span>Step details</span>
+          <span></span>
+        </div>
+        <div class="formset-rows" data-formset-rows>
+          {% for form in step_formset %}
+          <div class="form-row step-row" data-form-row>
+            {{ form.id }}
+            {{ form.non_field_errors }}
+            {{ form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ form.text.id_for_label }}">Step details</label>
+              {{ form.text }}
+              {{ form.text.errors }}
+            </div>
+            {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+          </div>
+          {% endfor %}
+        </div>
+        <template data-formset-template>
+          <div class="form-row step-row" data-form-row>
+            {{ step_formset.empty_form.id }}
+            {{ step_formset.empty_form.order.as_hidden }}
+            <div>
+              <label class="sr-only" for="{{ step_formset.empty_form.text.id_for_label }}">Step details</label>
+              {{ step_formset.empty_form.text }}
+            </div>
+            {% if step_formset.empty_form.DELETE %}{{ step_formset.empty_form.DELETE.as_hidden }}{% endif %}
+            <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+          </div>
+        </template>
+        <div class="formset-add-row">
+          <button class="icon-button" type="button" data-formset-add aria-label="Add instruction">+</button>
+        </div>
+      </section>
+
+      <div class="actions form-actions">
+        <button type="submit">Save recipe</button>
+        <a class="button secondary" href="{% if recipe.pk %}{{ recipe.get_absolute_url }}{% else %}{% url 'recipes:list' %}{% endif %}" data-discard-changes>Cancel</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}
