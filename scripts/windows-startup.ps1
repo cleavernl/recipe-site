@@ -1,10 +1,12 @@
 param(
     [string]$DistroName = "Ubuntu",
     [string]$WslProjectDir = "~/recipe-home/recipe-site",
+    [string]$WslLinuxUser = "",
     [int]$ListenPort = 8000,
     [switch]$SkipTailscaleServe = $false,
     [switch]$EnableFunnel = $false,
     [string]$LogFile = "",
+    [string]$TailscaleExe = "",
     [int]$WslReadyMaxAttempts = 45,
     [int]$WslReadySleepSeconds = 2
 )
@@ -28,16 +30,62 @@ if (-not $LogFile) {
 Start-Transcript -LiteralPath $LogFile -Append | Out-Null
 Write-Host "Log file: $LogFile"
 Write-Host "Started at $(Get-Date -Format o)"
+Write-Host "Running as: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+
+function Resolve-TailscaleExe {
+    param([string]$ExplicitPath)
+
+    if ($ExplicitPath) {
+        if (-not (Test-Path -LiteralPath $ExplicitPath)) {
+            throw "Tailscale not found at -TailscaleExe: $ExplicitPath"
+        }
+        return (Resolve-Path -LiteralPath $ExplicitPath).Path
+    }
+
+    $cmd = Get-Command tailscale -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Source) {
+        return $cmd.Source
+    }
+
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "Tailscale\tailscale.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Tailscale\tailscale.exe")
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) {
+            return (Resolve-Path -LiteralPath $c).Path
+        }
+    }
+
+    throw "tailscale.exe not found in PATH or under Program Files. Install Tailscale or pass -TailscaleExe."
+}
+
+function Invoke-WslBash {
+    param(
+        [string]$WslExePath,
+        [string]$Distro,
+        [string]$LinuxUser,
+        [string]$BashCommand
+    )
+
+    if ($LinuxUser) {
+        & $WslExePath -d $Distro -u $LinuxUser -- bash -lc $BashCommand
+    } else {
+        & $WslExePath -d $Distro -- bash -lc $BashCommand
+    }
+}
 
 function Wait-WslReady {
     param(
+        [string]$WslExePath,
         [string]$Distro,
+        [string]$LinuxUser,
         [int]$MaxAttempts,
         [int]$SleepSeconds
     )
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $probe = & $WslExe -d $Distro -- bash -lc "echo wsl-ok" 2>&1
+        $probe = Invoke-WslBash -WslExePath $WslExePath -Distro $Distro -LinuxUser $LinuxUser -BashCommand "echo wsl-ok" 2>&1
         $exitCode = $LASTEXITCODE
         $probeText = "$probe"
         if ($exitCode -eq 0 -and ($probeText -match "wsl-ok")) {
@@ -53,9 +101,13 @@ function Wait-WslReady {
 }
 
 function Get-WslPrimaryIp {
-    param([string]$Distro)
+    param(
+        [string]$WslExePath,
+        [string]$Distro,
+        [string]$LinuxUser
+    )
 
-    $raw = & $WslExe -d $Distro -- bash -lc "hostname -I" 2>&1
+    $raw = Invoke-WslBash -WslExePath $WslExePath -Distro $Distro -LinuxUser $LinuxUser -BashCommand "hostname -I" 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "hostname -I failed in distro '$Distro': $raw"
     }
@@ -107,34 +159,42 @@ function Set-PortProxy {
 }
 
 try {
-    Wait-WslReady -Distro $DistroName -MaxAttempts $WslReadyMaxAttempts -SleepSeconds $WslReadySleepSeconds
+    $ts = Resolve-TailscaleExe -ExplicitPath $TailscaleExe
+
+    Wait-WslReady `
+        -WslExePath $WslExe `
+        -Distro $DistroName `
+        -LinuxUser $WslLinuxUser `
+        -MaxAttempts $WslReadyMaxAttempts `
+        -SleepSeconds $WslReadySleepSeconds
 
     Write-Host "Starting recipe-site compose stack in WSL..."
-    $composeResult = & $WslExe -d $DistroName -- bash -lc "cd $WslProjectDir && ./scripts/wsl-start-stack.sh" 2>&1
+    $composeCmd = "cd $WslProjectDir && ./scripts/wsl-start-stack.sh"
+    $composeResult = Invoke-WslBash -WslExePath $WslExe -Distro $DistroName -LinuxUser $WslLinuxUser -BashCommand $composeCmd 2>&1
     Write-Host $composeResult
     if ($LASTEXITCODE -ne 0) {
         throw "wsl-start-stack.sh exited with code $LASTEXITCODE"
     }
 
-    $wslIp = Get-WslPrimaryIp -Distro $DistroName
+    $wslIp = Get-WslPrimaryIp -WslExePath $WslExe -Distro $DistroName -LinuxUser $WslLinuxUser
     Set-PortProxy -Port $ListenPort -TargetIp $wslIp
     Ensure-FirewallRule -Port $ListenPort
 
     if (-not $SkipTailscaleServe) {
         $backendUrl = "http://127.0.0.1:$ListenPort"
-        Write-Host "Starting Tailscale Serve (HTTPS -> $backendUrl)..."
-        & tailscale serve --bg --https=443 $backendUrl
+        Write-Host "Starting Tailscale Serve (HTTPS -> $backendUrl) using $ts ..."
+        & $ts serve --bg --https=443 $backendUrl
         Write-Host "Tailscale serve status:"
-        & tailscale serve status
+        & $ts serve status
     }
 
     if ($EnableFunnel) {
         Write-Host "Ensuring Tailscale Funnel is enabled for local port $ListenPort..."
-        & tailscale funnel --bg $ListenPort
+        & $ts funnel --bg $ListenPort
     }
 
     Write-Host "Current funnel status:"
-    & tailscale funnel status
+    & $ts funnel status
 
     Write-Host ""
     Write-Host "Startup script completed."

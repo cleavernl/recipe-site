@@ -78,19 +78,33 @@ Run from elevated PowerShell:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
 
-To run it automatically after reboot, use **Task Scheduler** with:
+To run it automatically after reboot, use **Task Scheduler**. Pick **one** pattern:
 
-- **Trigger:** **At log on** for your Windows account (recommended). Avoid relying on **SYSTEM** at bare startup; WSL and rootless Podman usually need your **user** session.
-- **General:** enable **Run with highest privileges**. Prefer **Run only when user is logged on** for this machine so `wsl.exe` runs in your profile (same as manual testing).
-- **Actions:** point **Program** at `powershell.exe` and put arguments on one line. Example:
+### A — Site up without logging in to Windows (headless / update reboots)
+
+Use this when the PC should serve the site after a **cold boot or Windows Update reboot** before anyone signs in at the desktop.
+
+- **General**
+  - **Run whether user is logged on or not**
+  - Select **your** Windows account (the same one where Podman and WSL work when you test manually). **Do not** run the task as **SYSTEM** or **LOCAL SERVICE** for this stack.
+  - Check **Run with highest privileges**
+  - Windows will store your password once for this task (normal for background user tasks).
+- **Trigger:** **At startup** (or **At log on** if you prefer), with a **delay of 90–120 seconds** so WSL and networking can finish coming up.
+- **Actions:** **Program:** `powershell.exe` — **Arguments** (one line; adjust paths and options):
 
 ```text
--ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -EnableFunnel
+-ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslLinuxUser YOUR_WSL_UNIX_USER -EnableFunnel -WslReadyMaxAttempts 90 -WslReadySleepSeconds 3
 ```
 
-Use the real Windows path to `scripts\windows-startup.ps1` (for example under your user profile). If your repo path differs inside WSL, add `-WslProjectDir "~/recipe-home/recipe-site"`.
+Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one that owns `~/recipe-home/recipe-site`). Omit `-WslLinuxUser ...` if the distro default user is already correct. Add `-TailscaleExe "C:\Program Files\Tailscale\tailscale.exe"` only if the log says `tailscale.exe not found` (scheduled tasks sometimes have a minimal `PATH`).
 
-Optional trigger delay (**30–60 seconds**) gives WSL time to finish initializing.
+### B — Only after you sign in (simpler debugging)
+
+- **Trigger:** **At log on** for your account.
+- **General:** **Run only when user is logged on**, **Run with highest privileges**, optional **30–60 s** delay.
+- Same **Actions** line as pattern A (you can drop the longer WSL wait if startup is reliable).
+
+Use the real Windows path to `scripts\windows-startup.ps1`. If the repo path differs inside WSL, set `-WslProjectDir "~/recipe-home/recipe-site"`.
 
 The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
 

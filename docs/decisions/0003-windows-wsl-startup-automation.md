@@ -17,6 +17,6 @@ Add two operational scripts:
 
 Reboot recovery becomes repeatable and schedulable through Windows Task Scheduler. Future deployment changes that alter ingress ports, WSL distro names, or compose locations must keep script parameters synchronized.
 
-Scheduled tasks should run **under the interactive Windows user at log on** (with optional delay). Starting WSL Podman from a **SYSTEM** “at startup” task often fails because WSL is not ready or does not run in the same context as manual testing.
+Scheduled tasks must run as the **deployment Windows user** (the account that owns WSL and rootless Podman), **not** as **SYSTEM**. For **headless** operation (no desktop logon), use **Run whether user is logged on or not** with that user’s stored credentials, **At startup** with a long delay, and see decision **0004** / README pattern A. **At log on** remains a simpler option when an interactive session is acceptable.
 
-The Windows script logs to `%LOCALAPPDATA%\recipe-site\startup.log` and waits for WSL to respond before running compose.
+The Windows script logs to `%LOCALAPPDATA%\recipe-site\startup.log`, waits for WSL, resolves `tailscale.exe` when `PATH` is minimal, and optionally runs compose as `-WslLinuxUser`.

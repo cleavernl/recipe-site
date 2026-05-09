@@ -9,3 +9,5 @@ alwaysApply: false
 Before changing Windows startup scripts, WSL compose bootstrap, or production TLS/host settings, read **`docs/decisions/0004-production-deployment-windows-wsl-tailscale.md`**.
 
 Do not store secrets, real Tailscale IPs, or hostnames in docs; use placeholders and point operators at `.env` and `%LOCALAPPDATA%\recipe-site\startup.log` for troubleshooting.
+
+Headless boot: Task Scheduler should run `windows-startup.ps1` as the **Windows user** that owns WSL/Podman, with **Run whether user is logged on or not**, not as SYSTEM. See README pattern A and decision 0004.

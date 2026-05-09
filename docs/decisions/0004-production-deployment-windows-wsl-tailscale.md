@@ -43,9 +43,11 @@ Media uploads are served in production via **`login_required`** media routes in 
 ## Reboot and automation
 
 - **`scripts/wsl-start-stack.sh`:** Runs `podman-compose up -d` (or `podman compose`) from the project root inside WSL.
-- **`scripts/windows-startup.ps1`:** Waits for WSL, runs the WSL script, refreshes portproxy, ensures firewall rule, runs Tailscale Serve (unless skipped), optionally Funnel. Writes a **transcript** to **`%LOCALAPPDATA%\recipe-site\startup.log`** (override with `-LogFile`).
+- **`scripts/windows-startup.ps1`:** Waits for WSL, runs the WSL script (optionally as a specific Linux user via `-WslLinuxUser`), refreshes portproxy, ensures firewall rule, runs Tailscale Serve (unless skipped), optionally Funnel. Resolves **`tailscale.exe`** from `PATH` or **`Program Files\Tailscale`** so scheduled tasks with a minimal `PATH` still work. Writes a **transcript** to **`%LOCALAPPDATA%\recipe-site\startup.log`** (override with `-LogFile`).
 
-**Task Scheduler pitfalls:** Tasks that run as **SYSTEM** at bare **startup** often fail to start WSL/Podman the same way as an interactive user. Prefer **At log on** for the deployment Windows user, **Run with highest privileges**, optional **30–60 s delay**, and align with the README “Windows Reboot Startup” section.
+**Headless operation (no interactive Windows logon):** Use Task Scheduler **Run whether user is logged on or not** with the **same Windows account** that owns the WSL distro and rootless Podman (not **SYSTEM**). Use an **At startup** trigger with a **90–120 s delay** and optionally longer WSL polling (`-WslReadyMaxAttempts` / `-WslReadySleepSeconds`). **BitLocker** or other pre-boot unlock may still be required once per power-on; this only removes the need for a **Windows desktop sign-in**.
+
+**Task Scheduler pitfalls:** Tasks that run as **SYSTEM** often fail for WSL + rootless Podman. Prefer the deployment **user** in all cases; choose **log on** vs **startup + run whether logged on or not** per README section A vs B.
 
 ## Operational checks
 
