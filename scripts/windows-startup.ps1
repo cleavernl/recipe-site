@@ -1,6 +1,6 @@
 param(
     [string]$DistroName = "Ubuntu",
-    [string]$WslProjectDir = "~/recipe-site-home/recipe-site",
+    [string]$WslProjectDir = "~/recipe-home/recipe-site",
     [int]$ListenPort = 8000,
     [switch]$EnableFunnel = $false
 )

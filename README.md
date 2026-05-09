@@ -69,14 +69,16 @@ If you deploy on a Windows mini PC with WSL, use `scripts/windows-startup.ps1` t
 - ensures a Private firewall rule for port `8000`,
 - optionally re-enables Tailscale Funnel.
 
+The default WSL project directory is `~/recipe-home/recipe-site`. Override with `-WslProjectDir` if your clone lives elsewhere.
+
 Run from elevated PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-site-home/recipe-site" -EnableFunnel
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
 
 To run it automatically at boot, create a Task Scheduler task that runs as highest privileges and executes:
 
 ```text
-powershell.exe -ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-site-home/recipe-site" -EnableFunnel
+powershell.exe -ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
