@@ -9,7 +9,7 @@ param(
     [string]$TailscaleExe = "",
     [int]$WslReadyMaxAttempts = 45,
     [int]$WslReadySleepSeconds = 2,
-    [int]$TailscaleReadyMaxAttempts = 60,
+    [int]$TailscaleReadyMaxAttempts = 90,
     [int]$TailscaleReadySleepSeconds = 5
 )
 
@@ -62,6 +62,22 @@ function Resolve-TailscaleExe {
     throw "tailscale.exe not found in PATH or under Program Files. Install Tailscale or pass -TailscaleExe."
 }
 
+function Ensure-TailscaleWindowsServiceRunning {
+    $candidates = Get-Service -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match 'Tailscale' -or $_.DisplayName -match 'Tailscale'
+    }
+    foreach ($svc in $candidates) {
+        if ($svc.Status -ne 'Running') {
+            Write-Host "Starting Windows service '$($svc.Name)' ($($svc.DisplayName))..."
+            try {
+                Start-Service -InputObject $svc -ErrorAction Stop
+            } catch {
+                Write-Host "Warning: could not start service '$($svc.Name)': $_"
+            }
+        }
+    }
+}
+
 function Wait-TailscaleReady {
     param(
         [string]$TsExe,
@@ -69,21 +85,50 @@ function Wait-TailscaleReady {
         [int]$SleepSeconds
     )
 
+    $stableLoggedOut = 0
+
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         $out = (& $TsExe status 2>&1 | Out-String).Trim()
-        if ($out -match '(?i)NeedsLogin|Logged out|not logged|log in at|please log in') {
-            throw "Tailscale is not logged in. Open the Tailscale app once and sign in, then retry. Output: $out"
+        $exit = $LASTEXITCODE
+
+        # While the GUI/daemon is still booting, status often shows NoState plus
+        # "You are logged out" + control plane errors (e.g. context canceled) — treat as transient.
+        $stillStarting = $out -match '(?i)Tailscale is starting|Please wait'
+        if ($stillStarting) {
+            Write-Host "Tailscale still starting (attempt $attempt / $MaxAttempts, exit=$exit)."
+            $stableLoggedOut = 0
+            Start-Sleep -Seconds $SleepSeconds
+            continue
         }
-        if ($LASTEXITCODE -eq 0 -and $out.Length -gt 0 -and $out -notmatch '(?i)NoState') {
-            $firstLine = ($out -split "`r?`n")[0]
-            Write-Host "Tailscale status OK on attempt $attempt (first line: $firstLine)"
+
+        $transientControlPlane = $out -match '(?i)context canceled|connection reset|timeout|temporary failure|i/o timeout'
+        if ($out -match '(?i)NoState' -and $transientControlPlane) {
+            Write-Host "Tailscale control plane not reachable yet (attempt $attempt / $MaxAttempts, exit=$exit)."
+            $stableLoggedOut = 0
+            Start-Sleep -Seconds $SleepSeconds
+            continue
+        }
+
+        if ($exit -eq 0 -and $out.Length -gt 0 -and $out -notmatch '(?i)NoState' -and $out -notmatch '(?i)You are logged out') {
+            $summary = ($out -split "`r?`n" | Where-Object { $_ -notmatch '^\s*#' -and $_.Trim().Length -gt 0 } | Select-Object -First 1)
+            Write-Host "Tailscale status OK on attempt $attempt (first line: $summary)"
             return
         }
-        Write-Host "Tailscale not ready yet (attempt $attempt / $MaxAttempts, exit=$LASTEXITCODE): $out"
+
+        if ($out -match '(?i)You are logged out|NeedsLogin' -and -not $stillStarting) {
+            $stableLoggedOut++
+            if ($stableLoggedOut -ge 5) {
+                throw "Tailscale stayed logged out after the daemon finished starting. Open the Tailscale app on this PC once and confirm you are signed in. Last output: $out"
+            }
+        } else {
+            $stableLoggedOut = 0
+        }
+
+        Write-Host "Tailscale not ready yet (attempt $attempt / $MaxAttempts, exit=$exit): $out"
         Start-Sleep -Seconds $SleepSeconds
     }
 
-    throw "Tailscale stayed in NoState or never returned status after $($MaxAttempts * $SleepSeconds) seconds. Increase the scheduled task startup delay or pass -TailscaleReadyMaxAttempts / -TailscaleReadySleepSeconds."
+    throw "Tailscale did not become ready after $($MaxAttempts * $SleepSeconds) seconds. Check network, Tailscale Windows service, and this transcript's log path. Increase -TailscaleReadyMaxAttempts or the scheduled task delay."
 }
 
 function Invoke-WslBash {
@@ -207,7 +252,8 @@ try {
     Ensure-FirewallRule -Port $ListenPort
 
     if (-not $SkipTailscaleServe -or $EnableFunnel) {
-        Write-Host "Waiting for Tailscale daemon (avoid NoState race)..."
+        Ensure-TailscaleWindowsServiceRunning
+        Write-Host "Waiting for Tailscale daemon (avoid NoState / boot network race)..."
         Wait-TailscaleReady `
             -TsExe $ts `
             -MaxAttempts $TailscaleReadyMaxAttempts `
