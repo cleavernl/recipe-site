@@ -59,3 +59,24 @@ uv run python manage.py check
 ## Importing Recipes
 
 The first version stores a recipe source URL but does not scrape or import recipe content from other sites. Robust link importing should be designed after the core recipe workflow has been used for a while.
+
+## Windows Reboot Startup
+
+If you deploy on a Windows mini PC with WSL, use `scripts/windows-startup.ps1` to recover the app after reboot. It:
+
+- starts the compose stack inside WSL,
+- refreshes Windows `portproxy` to the current WSL IP,
+- ensures a Private firewall rule for port `8000`,
+- optionally re-enables Tailscale Funnel.
+
+Run from elevated PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-site-home/recipe-site" -EnableFunnel
+```
+
+To run it automatically at boot, create a Task Scheduler task that runs as highest privileges and executes:
+
+```text
+powershell.exe -ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-site-home/recipe-site" -EnableFunnel
+```
