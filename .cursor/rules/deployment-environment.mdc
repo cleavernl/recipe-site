@@ -1,0 +1,11 @@
+---
+description: Production deployment on Windows + WSL + Tailscale
+globs: scripts/windows-startup.ps1,scripts/wsl-start-stack.sh,compose.yaml,docs/decisions/0004*.md
+alwaysApply: false
+---
+
+# Deployment environment
+
+Before changing Windows startup scripts, WSL compose bootstrap, or production TLS/host settings, read **`docs/decisions/0004-production-deployment-windows-wsl-tailscale.md`**.
+
+Do not store secrets, real Tailscale IPs, or hostnames in docs; use placeholders and point operators at `.env` and `%LOCALAPPDATA%\recipe-site\startup.log` for troubleshooting.

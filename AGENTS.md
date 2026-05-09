@@ -23,6 +23,11 @@ This repository is expected to be developed primarily by AI agents. Keep this fi
 ## Current Scoped Rules
 
 - `.cursor/rules/django-recipe-app.mdc`: Django app architecture, privacy defaults, permissions, and tooling.
+- `.cursor/rules/deployment-environment.mdc`: Windows + WSL + Tailscale production context (see decision 0004).
+
+## Production deployment (reference)
+
+- **`docs/decisions/0004-production-deployment-windows-wsl-tailscale.md`**: Windows 11 + WSL2 + Podman + Tailscale (Serve/Funnel), portproxy, firewall, `.env` expectations, reboot automation, and log path. Read this before changing `scripts/windows-startup.ps1`, `scripts/wsl-start-stack.sh`, or production Django TLS/host settings.
 
 ## Project Posture
 
