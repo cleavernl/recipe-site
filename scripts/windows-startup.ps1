@@ -10,7 +10,8 @@ param(
     [int]$WslReadyMaxAttempts = 45,
     [int]$WslReadySleepSeconds = 2,
     [int]$TailscaleReadyMaxAttempts = 90,
-    [int]$TailscaleReadySleepSeconds = 5
+    [int]$TailscaleReadySleepSeconds = 5,
+    [bool]$EnsureTailscaleAutomaticStartup = $true
 )
 
 Set-StrictMode -Version Latest
@@ -63,10 +64,32 @@ function Resolve-TailscaleExe {
 }
 
 function Ensure-TailscaleWindowsServiceRunning {
-    $candidates = Get-Service -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -match 'Tailscale' -or $_.DisplayName -match 'Tailscale'
+    param([bool]$SetAutomaticStartup)
+
+    $candidates = @(
+        Get-Service -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match 'Tailscale' -or $_.DisplayName -match 'Tailscale'
+        }
+    )
+
+    if ($candidates.Count -eq 0) {
+        Write-Host @"
+Warning: No Windows service matching 'Tailscale' was found. Tailscale may only be starting with your user session (tray app). Install Tailscale for Windows and ensure a Tailscale service exists, or set Tailscale to start at boot via services.msc (Startup type: Automatic).
+"@
+        return
     }
+
     foreach ($svc in $candidates) {
+        if ($SetAutomaticStartup -and $svc.StartType -eq [System.ServiceProcess.ServiceStartMode]::Manual) {
+            Write-Host "Setting service '$($svc.Name)' startup type to Automatic (so Tailscale can run before desktop sign-in)..."
+            try {
+                Set-Service -Name $svc.Name -StartupType Automatic -ErrorAction Stop
+                $svc = Get-Service -Name $svc.Name
+            } catch {
+                Write-Host "Warning: could not set Automatic startup for '$($svc.Name)': $_"
+            }
+        }
+
         if ($svc.Status -ne 'Running') {
             Write-Host "Starting Windows service '$($svc.Name)' ($($svc.DisplayName))..."
             try {
@@ -252,7 +275,7 @@ try {
     Ensure-FirewallRule -Port $ListenPort
 
     if (-not $SkipTailscaleServe -or $EnableFunnel) {
-        Ensure-TailscaleWindowsServiceRunning
+        Ensure-TailscaleWindowsServiceRunning -SetAutomaticStartup $EnsureTailscaleAutomaticStartup
         Write-Host "Waiting for Tailscale daemon (avoid NoState / boot network race)..."
         Wait-TailscaleReady `
             -TsExe $ts `

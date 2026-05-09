@@ -27,6 +27,7 @@ This record captures environment facts that are not obvious from code alone and 
 - **Serve:** Terminates TLS on the tailnet hostname (e.g. `https://<machine>.tail<number>.ts.net`) and proxies to **`http://127.0.0.1:8000`** on Windows. Configured from `scripts/windows-startup.ps1` unless `-SkipTailscaleServe`.
 - **Funnel:** Optional public exposure; `tailscale funnel --bg 8000` when `-EnableFunnel`. Visitors do not need Tailscale accounts; threat model is wider than tailnet-only.
 - **Do not** use `https://<tailnet-host>:8000` for browsers—port 8000 is plain HTTP on the app; HTTPS is via Serve on **443**.
+- **Before desktop logon:** Tailscale must be available via a **Windows service** set to **Automatic** (or **Automatic (Delayed Start)**), not only the user’s tray/login startup. If the tunnel appears only after signing in, fix **services.msc** or use the script’s default **`EnsureTailscaleAutomaticStartup`** to promote **Manual** services to **Automatic** when the startup task runs elevated.
 
 ## Django production settings (`.env`)
 
