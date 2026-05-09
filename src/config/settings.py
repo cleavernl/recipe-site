@@ -110,6 +110,9 @@ LOGIN_REDIRECT_URL = "recipes:list"
 LOGOUT_REDIRECT_URL = "login"
 
 if env_bool("DJANGO_SECURE_SSL"):
+    # Respect HTTPS indication from a reverse proxy (e.g., Tailscale Serve)
+    # so Django doesn't enter a redirect loop when TLS terminates upstream.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
