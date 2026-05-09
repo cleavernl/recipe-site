@@ -11,7 +11,8 @@ param(
     [int]$WslReadySleepSeconds = 2,
     [int]$TailscaleReadyMaxAttempts = 90,
     [int]$TailscaleReadySleepSeconds = 5,
-    [bool]$EnsureTailscaleAutomaticStartup = $true
+    [bool]$EnsureTailscaleAutomaticStartup = $true,
+    [string]$TailscaleAuthKeyFile = ""
 )
 
 Set-StrictMode -Version Latest
@@ -61,6 +62,44 @@ function Resolve-TailscaleExe {
     }
 
     throw "tailscale.exe not found in PATH or under Program Files. Install Tailscale or pass -TailscaleExe."
+}
+
+function Invoke-TailscaleAuthKeyUp {
+    param(
+        [string]$TsExe,
+        [string]$AuthKey
+    )
+
+    if (-not $AuthKey) {
+        return
+    }
+
+    Write-Host "Running tailscale up with auth key (for headless boot before any user signs in)..."
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $out = & $TsExe up --authkey $AuthKey 2>&1
+        Write-Host $out
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
+function Resolve-TailscaleAuthKey {
+    param([string]$KeyFilePath)
+
+    $fromEnv = $env:RECIPE_SITE_TAILSCALE_AUTHKEY
+    if ($fromEnv) {
+        return $fromEnv.Trim()
+    }
+    if (-not $KeyFilePath) {
+        return ""
+    }
+    if (-not (Test-Path -LiteralPath $KeyFilePath)) {
+        return ""
+    }
+    $line = (Get-Content -LiteralPath $KeyFilePath -ErrorAction Stop | Select-Object -First 1).Trim()
+    return $line
 }
 
 function Ensure-TailscaleWindowsServiceRunning {
@@ -276,6 +315,12 @@ try {
 
     if (-not $SkipTailscaleServe -or $EnableFunnel) {
         Ensure-TailscaleWindowsServiceRunning -SetAutomaticStartup $EnsureTailscaleAutomaticStartup
+
+        $authKey = Resolve-TailscaleAuthKey -KeyFilePath $TailscaleAuthKeyFile
+        if ($authKey) {
+            Invoke-TailscaleAuthKeyUp -TsExe $ts -AuthKey $authKey
+        }
+
         Write-Host "Waiting for Tailscale daemon (avoid NoState / boot network race)..."
         Wait-TailscaleReady `
             -TsExe $ts `

@@ -27,7 +27,8 @@ This record captures environment facts that are not obvious from code alone and 
 - **Serve:** Terminates TLS on the tailnet hostname (e.g. `https://<machine>.tail<number>.ts.net`) and proxies to **`http://127.0.0.1:8000`** on Windows. Configured from `scripts/windows-startup.ps1` unless `-SkipTailscaleServe`.
 - **Funnel:** Optional public exposure; `tailscale funnel --bg 8000` when `-EnableFunnel`. Visitors do not need Tailscale accounts; threat model is wider than tailnet-only.
 - **Do not** use `https://<tailnet-host>:8000` for browsers—port 8000 is plain HTTP on the app; HTTPS is via Serve on **443**.
-- **Before desktop logon:** Tailscale must be available via a **Windows service** set to **Automatic** (or **Automatic (Delayed Start)**), not only the user’s tray/login startup. If the tunnel appears only after signing in, fix **services.msc** or use the script’s default **`EnsureTailscaleAutomaticStartup`** to promote **Manual** services to **Automatic** when the startup task runs elevated.
+- **Before desktop boot:** Tailscale should use a **Windows service** set to **Automatic** (or **Automatic (Delayed Start)**), not only the tray after sign-in. The startup script can promote **Manual → Automatic** when run elevated.
+- **Before desktop logon (credentials):** Interactive logins (GitHub, Microsoft, etc.) often store state that is not fully available until a **user session** exists. Symptom: **`tailscale status`** stays on **“Tailscale is starting”** for a long time or until someone signs in. Mitigation: use a **Tailscale auth key** and **`tailscale up --authkey`** from `windows-startup.ps1` (via **`RECIPE_SITE_TAILSCALE_AUTHKEY`** or **`-TailscaleAuthKeyFile`**); keep keys out of source control and restrict file ACLs.
 
 ## Django production settings (`.env`)
 

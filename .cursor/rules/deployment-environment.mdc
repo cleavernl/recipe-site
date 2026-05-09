@@ -10,4 +10,4 @@ Before changing Windows startup scripts, WSL compose bootstrap, or production TL
 
 Do not store secrets, real Tailscale IPs, or hostnames in docs; use placeholders and point operators at `.env` and `%LOCALAPPDATA%\recipe-site\startup.log` for troubleshooting.
 
-Headless boot: Task Scheduler should run `windows-startup.ps1` as the **Windows user** that owns WSL/Podman, with **Run whether user is logged on or not**, not as SYSTEM. See README pattern A and decision 0004.
+Headless boot: Task Scheduler should run `windows-startup.ps1` as the **Windows user** that owns WSL/Podman, with **Run whether user is logged on or not**, not as SYSTEM. See README pattern A and decision 0004. If Tailscale stays on “starting” until someone signs in, use a **Tailscale auth key** (`-TailscaleAuthKeyFile` or `RECIPE_SITE_TAILSCALE_AUTHKEY`), not OAuth alone.
