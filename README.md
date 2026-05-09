@@ -67,6 +67,7 @@ If you deploy on a Windows mini PC with WSL, use `scripts/windows-startup.ps1` t
 - starts the compose stack inside WSL,
 - refreshes Windows `portproxy` to the current WSL IP,
 - ensures a Private firewall rule for port `8000`,
+- starts **Tailscale Serve** (`https` on port 443 proxied to `http://127.0.0.1:8000`) unless you pass `-SkipTailscaleServe`,
 - optionally re-enables Tailscale Funnel.
 
 The default WSL project directory is `~/recipe-home/recipe-site`. Override with `-WslProjectDir` if your clone lives elsewhere.
@@ -82,3 +83,4 @@ To run it automatically at boot, create a Task Scheduler task that runs as highe
 ```text
 powershell.exe -ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
+-ExecutionPolicy Bypass -File "\\wsl.localhost\Ubuntu\home\cleavernl\recipe-home\recipe-site\scripts\windows-startup.ps1" -DistroName Ubuntu -EnableFunnel

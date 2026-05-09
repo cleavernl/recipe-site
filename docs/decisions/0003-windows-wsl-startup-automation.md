@@ -11,7 +11,7 @@ The production path now includes a Windows mini PC host, WSL-hosted Podman Compo
 Add two operational scripts:
 
 - `scripts/wsl-start-stack.sh` starts the container stack inside WSL with `podman-compose` (or `podman compose` fallback).
-- `scripts/windows-startup.ps1` orchestrates reboot recovery from Windows by starting the WSL stack, refreshing `portproxy` for the current WSL IP, ensuring inbound firewall access on the selected port, and optionally re-enabling Tailscale Funnel.
+- `scripts/windows-startup.ps1` orchestrates reboot recovery from Windows by starting the WSL stack, refreshing `portproxy` for the current WSL IP, ensuring inbound firewall access on the selected port, starting Tailscale HTTPS Serve (443 to local app port) unless skipped, and optionally re-enabling Tailscale Funnel.
 
 ## Consequences
 

@@ -2,6 +2,7 @@ param(
     [string]$DistroName = "Ubuntu",
     [string]$WslProjectDir = "~/recipe-home/recipe-site",
     [int]$ListenPort = 8000,
+    [switch]$SkipTailscaleServe = $false,
     [switch]$EnableFunnel = $false
 )
 
@@ -66,6 +67,14 @@ $wslIp = Get-WslPrimaryIp -Distro $DistroName
 Set-PortProxy -Port $ListenPort -TargetIp $wslIp
 Ensure-FirewallRule -Port $ListenPort
 
+if (-not $SkipTailscaleServe) {
+    $backendUrl = "http://127.0.0.1:$ListenPort"
+    Write-Host "Starting Tailscale Serve (HTTPS -> $backendUrl)..."
+    & tailscale serve --bg --https=443 $backendUrl
+    Write-Host "Tailscale serve status:"
+    & tailscale serve status
+}
+
 if ($EnableFunnel) {
     Write-Host "Ensuring Tailscale Funnel is enabled for local port $ListenPort..."
     tailscale funnel --bg $ListenPort
@@ -77,5 +86,5 @@ tailscale funnel status
 Write-Host ""
 Write-Host "Startup script completed."
 Write-Host "Check local access: http://localhost:$ListenPort/"
-Write-Host "Check tailnet HTTPS: https://<your-tailnet-hostname>/"
+Write-Host "Check tailnet HTTPS (Serve): https://<your-tailnet-hostname>/"
 
