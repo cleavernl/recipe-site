@@ -106,6 +106,8 @@ Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one tha
 
 Use the real Windows path to `scripts\windows-startup.ps1`. If the repo path differs inside WSL, set `-WslProjectDir "~/recipe-home/recipe-site"`.
 
+If **`startup.log`** shows **`unexpected state: NoState`** from Tailscale, the task likely ran before the Tailscale Windows service finished connecting. The startup script **polls** `tailscale status` first (default up to **60 × 5 seconds**). Increase the Task Scheduler **startup delay** or pass **`-TailscaleReadyMaxAttempts`** / **`-TailscaleReadySleepSeconds`** on the command line if your network is slow.
+
 The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
 
 Override with `-LogFile "D:\logs\recipe-site.txt"` if you want a different path.

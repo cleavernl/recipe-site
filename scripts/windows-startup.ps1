@@ -8,7 +8,9 @@ param(
     [string]$LogFile = "",
     [string]$TailscaleExe = "",
     [int]$WslReadyMaxAttempts = 45,
-    [int]$WslReadySleepSeconds = 2
+    [int]$WslReadySleepSeconds = 2,
+    [int]$TailscaleReadyMaxAttempts = 60,
+    [int]$TailscaleReadySleepSeconds = 5
 )
 
 Set-StrictMode -Version Latest
@@ -58,6 +60,30 @@ function Resolve-TailscaleExe {
     }
 
     throw "tailscale.exe not found in PATH or under Program Files. Install Tailscale or pass -TailscaleExe."
+}
+
+function Wait-TailscaleReady {
+    param(
+        [string]$TsExe,
+        [int]$MaxAttempts,
+        [int]$SleepSeconds
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $out = (& $TsExe status 2>&1 | Out-String).Trim()
+        if ($out -match '(?i)NeedsLogin|Logged out|not logged|log in at|please log in') {
+            throw "Tailscale is not logged in. Open the Tailscale app once and sign in, then retry. Output: $out"
+        }
+        if ($LASTEXITCODE -eq 0 -and $out.Length -gt 0 -and $out -notmatch '(?i)NoState') {
+            $firstLine = ($out -split "`r?`n")[0]
+            Write-Host "Tailscale status OK on attempt $attempt (first line: $firstLine)"
+            return
+        }
+        Write-Host "Tailscale not ready yet (attempt $attempt / $MaxAttempts, exit=$LASTEXITCODE): $out"
+        Start-Sleep -Seconds $SleepSeconds
+    }
+
+    throw "Tailscale stayed in NoState or never returned status after $($MaxAttempts * $SleepSeconds) seconds. Increase the scheduled task startup delay or pass -TailscaleReadyMaxAttempts / -TailscaleReadySleepSeconds."
 }
 
 function Invoke-WslBash {
@@ -179,6 +205,14 @@ try {
     $wslIp = Get-WslPrimaryIp -WslExePath $WslExe -Distro $DistroName -LinuxUser $WslLinuxUser
     Set-PortProxy -Port $ListenPort -TargetIp $wslIp
     Ensure-FirewallRule -Port $ListenPort
+
+    if (-not $SkipTailscaleServe -or $EnableFunnel) {
+        Write-Host "Waiting for Tailscale daemon (avoid NoState race)..."
+        Wait-TailscaleReady `
+            -TsExe $ts `
+            -MaxAttempts $TailscaleReadyMaxAttempts `
+            -SleepSeconds $TailscaleReadySleepSeconds
+    }
 
     if (-not $SkipTailscaleServe) {
         $backendUrl = "http://127.0.0.1:$ListenPort"

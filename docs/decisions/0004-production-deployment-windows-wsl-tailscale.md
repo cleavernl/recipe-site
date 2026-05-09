@@ -43,7 +43,7 @@ Media uploads are served in production via **`login_required`** media routes in 
 ## Reboot and automation
 
 - **`scripts/wsl-start-stack.sh`:** Runs `podman-compose up -d` (or `podman compose`) from the project root inside WSL.
-- **`scripts/windows-startup.ps1`:** Waits for WSL, runs the WSL script (optionally as a specific Linux user via `-WslLinuxUser`), refreshes portproxy, ensures firewall rule, runs Tailscale Serve (unless skipped), optionally Funnel. Resolves **`tailscale.exe`** from `PATH` or **`Program Files\Tailscale`** so scheduled tasks with a minimal `PATH` still work. Writes a **transcript** to **`%LOCALAPPDATA%\recipe-site\startup.log`** (override with `-LogFile`).
+- **`scripts/windows-startup.ps1`:** Waits for WSL, runs the WSL script (optionally as a specific Linux user via `-WslLinuxUser`), refreshes portproxy, ensures firewall rule, **waits for Tailscale `status` to leave `NoState`** (boot race) before Serve/Funnel, then runs Tailscale Serve (unless skipped), optionally Funnel. Resolves **`tailscale.exe`** from `PATH` or **`Program Files\Tailscale`** so scheduled tasks with a minimal `PATH` still work. Writes a **transcript** to **`%LOCALAPPDATA%\recipe-site\startup.log`** (override with `-LogFile`).
 
 **Headless operation (no interactive Windows logon):** Use Task Scheduler **Run whether user is logged on or not** with the **same Windows account** that owns the WSL distro and rootless Podman (not **SYSTEM**). Use an **At startup** trigger with a **90–120 s delay** and optionally longer WSL polling (`-WslReadyMaxAttempts` / `-WslReadySleepSeconds`). **BitLocker** or other pre-boot unlock may still be required once per power-on; this only removes the need for a **Windows desktop sign-in**.
 
