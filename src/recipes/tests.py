@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.test.utils import override_settings
 
 from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto
 from recipes.views import purge_expired_deleted_recipes
@@ -441,3 +445,34 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response["Location"])
+
+
+@override_settings(DEBUG=False)
+class ProtectedMediaServingTests(TestCase):
+    def setUp(self):
+        self.temp_media_root = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.temp_media_root, ignore_errors=True))
+        self.override = override_settings(MEDIA_ROOT=self.temp_media_root)
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+
+        self.user = User.objects.create_user(username="media-user", password="password-123")
+        self.recipe = Recipe.objects.create(owner=self.user, title="Photo Test")
+        self.recipe.photo.save(
+            "media-test.jpg",
+            SimpleUploadedFile("media-test.jpg", b"fake-image-content", content_type="image/jpeg"),
+            save=True,
+        )
+
+    def test_media_file_requires_login_when_debug_false(self):
+        response = self.client.get(self.recipe.photo.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response["Location"])
+
+    def test_authenticated_user_can_access_media_file_when_debug_false(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.recipe.photo.url)
+
+        self.assertEqual(response.status_code, 200)
