@@ -16,3 +16,7 @@ Add two operational scripts:
 ## Consequences
 
 Reboot recovery becomes repeatable and schedulable through Windows Task Scheduler. Future deployment changes that alter ingress ports, WSL distro names, or compose locations must keep script parameters synchronized.
+
+Scheduled tasks should run **under the interactive Windows user at log on** (with optional delay). Starting WSL Podman from a **SYSTEM** “at startup” task often fails because WSL is not ready or does not run in the same context as manual testing.
+
+The Windows script logs to `%LOCALAPPDATA%\recipe-site\startup.log` and waits for WSL to respond before running compose.

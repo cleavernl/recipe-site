@@ -78,9 +78,20 @@ Run from elevated PowerShell:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
 
-To run it automatically at boot, create a Task Scheduler task that runs as highest privileges and executes:
+To run it automatically after reboot, use **Task Scheduler** with:
+
+- **Trigger:** **At log on** for your Windows account (recommended). Avoid relying on **SYSTEM** at bare startup; WSL and rootless Podman usually need your **user** session.
+- **General:** enable **Run with highest privileges**. Prefer **Run only when user is logged on** for this machine so `wsl.exe` runs in your profile (same as manual testing).
+- **Actions:** point **Program** at `powershell.exe` and put arguments on one line. Example:
 
 ```text
-powershell.exe -ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
+-ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -EnableFunnel
 ```
--ExecutionPolicy Bypass -File "\\wsl.localhost\Ubuntu\home\cleavernl\recipe-home\recipe-site\scripts\windows-startup.ps1" -DistroName Ubuntu -EnableFunnel
+
+Use the real Windows path to `scripts\windows-startup.ps1` (for example under your user profile). If your repo path differs inside WSL, add `-WslProjectDir "~/recipe-home/recipe-site"`.
+
+Optional trigger delay (**30–60 seconds**) gives WSL time to finish initializing.
+
+The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
+
+Override with `-LogFile "D:\logs\recipe-site.txt"` if you want a different path.
