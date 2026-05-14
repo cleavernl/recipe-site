@@ -106,7 +106,7 @@ Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one tha
 
 Use the real Windows path to `scripts\windows-startup.ps1`. If the repo path differs inside WSL, set `-WslProjectDir "~/recipe-home/recipe-site"`.
 
-If Tailscale only works **after you sign in to Windows**, two things are common:
+If Tailscale only works **after you sign in to Windows**, these causes are common:
 
 1. **Service startup:** The Tailscale **Windows service** may be **Manual** or only the **tray app** runs in your session. Open **`services.msc`**, find the Tailscale-related service, set **Startup type** to **Automatic** (or **Automatic (Delayed Start)**). The startup script also tries **Manual → Automatic** by default (`EnsureTailscaleAutomaticStartup`, default **true**); pass **`-EnsureTailscaleAutomaticStartup:$false`** to skip that.
 
@@ -115,9 +115,11 @@ If Tailscale only works **after you sign in to Windows**, two things are common:
    - In the [Tailscale admin keys](https://login.tailscale.com/admin/settings/keys) page, create a **reusable** auth key (note expiry and tailnet policy).
    - On the mini PC, store the key **only** in a file with tight ACLs: **`C:\ProgramData\recipe-site\tailscale-authkey.txt`** (one line, no trailing spaces), readable only by **Administrators** (and the account that runs the task). Create the **`recipe-site`** folder if needed.
    - The startup script **reads that path automatically** (you do **not** need `-TailscaleAuthKeyFile` unless you use a different location). Alternatively pass **`-TailscaleAuthKeyFile "D:\path\to\key.txt"`** or set **`RECIPE_SITE_TAILSCALE_AUTHKEY`** for the scheduled task (less ideal; avoid logging it).
-   - The script runs **`tailscale up --authkey …`** once before waiting on **`tailscale status`**. **Never commit the key** to git.
+   - The script **starts the Tailscale service**, waits **`InitialTailscaleDelaySeconds`** (default **45**) for DHCP/policy network, then runs **`tailscale up --authkey …`** **before** WSL/Podman so the daemon can connect while the stack starts. It logs **`tailscale up exit code:`** (check for non-zero). While waiting, it **re-runs** `tailscale up` every **15** status polls and may **restart the Tailscale service** around attempts **36** and **72** if still stuck on “starting”. **Never commit the key** to git.
 
-Without an auth key, the script runs **`tailscale up`** once (no key) to nudge reconnect, then waits. If **`tailscale status`** stays on **“Tailscale is starting”** for about **45 × 5 seconds (~3.75 minutes)** with **no** auth key configured, it **stops with an error** (instead of waiting the full budget) and tells you to add the key file above. You can raise that budget with **`-TailscaleReadyMaxAttempts`** (default **120**) if you truly rely on OAuth-only and slow networks.
+3. **Still stuck until you sign in even with an auth key:** Some Windows builds defer full connectivity or vault access until an **interactive logon**. Mitigations: increase the Task Scheduler **startup delay** (e.g. **5–10 minutes**); pass **`-InitialTailscaleDelaySeconds 120`**; increase **`-TailscaleReadyMaxAttempts`** (default **150**); enable Group Policy **Computer Configuration → Administrative Templates → System → Logon → “Always wait for the network at computer startup and logon”**; last resort **auto-logon** for a dedicated service account (security tradeoff).
+
+Without an auth key, if **`tailscale status`** stays on **“Tailscale is starting”** for about **45 × 5 seconds (~3.75 minutes)**, the script **stops with an error** pointing at the key file.
 
 The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
 

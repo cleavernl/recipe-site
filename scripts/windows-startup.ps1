@@ -9,10 +9,11 @@ param(
     [string]$TailscaleExe = "",
     [int]$WslReadyMaxAttempts = 45,
     [int]$WslReadySleepSeconds = 2,
-    [int]$TailscaleReadyMaxAttempts = 120,
+    [int]$TailscaleReadyMaxAttempts = 150,
     [int]$TailscaleReadySleepSeconds = 5,
     [bool]$EnsureTailscaleAutomaticStartup = $true,
-    [string]$TailscaleAuthKeyFile = ""
+    [string]$TailscaleAuthKeyFile = "",
+    [int]$InitialTailscaleDelaySeconds = 45
 )
 
 Set-StrictMode -Version Latest
@@ -71,17 +72,42 @@ function Invoke-TailscaleAuthKeyUp {
     )
 
     if (-not $AuthKey) {
-        return
+        return 0
     }
 
     Write-Host "Running tailscale up with auth key (for headless boot before any user signs in)..."
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $out = & $TsExe up --authkey $AuthKey 2>&1
-        Write-Host $out
+        $out = & $TsExe up --authkey=$AuthKey 2>&1 | Out-String
+        $code = $LASTEXITCODE
+        Write-Host "tailscale up exit code: $code"
+        if ($out.Trim().Length -gt 0) {
+            Write-Host $out.TrimEnd()
+        } else {
+            Write-Host "(tailscale up produced no stdout/stderr)"
+        }
+        return $code
     } finally {
         $ErrorActionPreference = $prev
+    }
+}
+
+function Restart-TailscaleWindowsServiceOnce {
+    $svc = Get-Service -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match 'Tailscale' -or $_.DisplayName -match 'Tailscale'
+    } | Select-Object -First 1
+
+    if (-not $svc) {
+        return
+    }
+
+    Write-Host "Restarting Windows service '$($svc.Name)' to recover stuck 'Tailscale is starting'..."
+    try {
+        Restart-Service -InputObject $svc -Force -ErrorAction Stop
+        Start-Sleep -Seconds 10
+    } catch {
+        Write-Host "Warning: Tailscale service restart failed: $_"
     }
 }
 
@@ -185,12 +211,14 @@ function Wait-TailscaleReady {
         [string]$TsExe,
         [int]$MaxAttempts,
         [int]$SleepSeconds,
-        [bool]$AuthKeyWasUsed
+        [bool]$AuthKeyWasUsed,
+        [string]$AuthKeyForRetry = ""
     )
 
     $stableLoggedOut = 0
     $consecutiveStartingOnly = 0
     $maxStartingOnlyBeforeHint = 45
+    $serviceRestartCount = 0
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         $out = (& $TsExe status 2>&1 | Out-String).Trim()
@@ -202,6 +230,23 @@ function Wait-TailscaleReady {
         if ($stillStarting) {
             $consecutiveStartingOnly++
             Write-Host "Tailscale still starting (attempt $attempt / $MaxAttempts, exit=$exit)."
+
+            if ($AuthKeyForRetry -and ($attempt % 15 -eq 0)) {
+                Write-Host "Re-trying tailscale up --authkey (periodic nudge while starting)..."
+                [void](Invoke-TailscaleAuthKeyUp -TsExe $TsExe -AuthKey $AuthKeyForRetry)
+            }
+
+            if ($AuthKeyForRetry -and $attempt -eq 36 -and $serviceRestartCount -lt 1) {
+                Restart-TailscaleWindowsServiceOnce
+                $serviceRestartCount++
+                [void](Invoke-TailscaleAuthKeyUp -TsExe $TsExe -AuthKey $AuthKeyForRetry)
+            }
+            if ($AuthKeyForRetry -and $attempt -eq 72 -and $serviceRestartCount -lt 2) {
+                Restart-TailscaleWindowsServiceOnce
+                $serviceRestartCount++
+                [void](Invoke-TailscaleAuthKeyUp -TsExe $TsExe -AuthKey $AuthKeyForRetry)
+            }
+
             if (-not $AuthKeyWasUsed -and $consecutiveStartingOnly -ge $maxStartingOnlyBeforeHint) {
                 throw @"
 Tailscale has been stuck on 'Tailscale is starting' for about $($maxStartingOnlyBeforeHint * $SleepSeconds) seconds with no auth key.
@@ -252,8 +297,8 @@ Then reboot and check this log again.
 
     throw @"
 Tailscale did not become ready after $($MaxAttempts * $SleepSeconds) seconds.
-If this only happens before anyone signs in to Windows, configure an auth key (see README): $env:ProgramData\recipe-site\tailscale-authkey.txt
-Otherwise check network, Tailscale service, and increase -TailscaleReadyMaxAttempts or the scheduled task delay.
+If status stayed on 'Tailscale is starting' until you signed in, Windows may be deferring full network or user-vault access until an interactive session. Try: (1) increase Task Scheduler startup delay and -InitialTailscaleDelaySeconds; (2) enable Group Policy 'Always wait for the network at computer startup and logon'; (3) increase -TailscaleReadyMaxAttempts; (4) as last resort use auto-logon for a dedicated service account (security tradeoff).
+Auth key file: $env:ProgramData\recipe-site\tailscale-authkey.txt
 "@
 }
 
@@ -358,6 +403,25 @@ function Set-PortProxy {
 try {
     $ts = Resolve-TailscaleExe -ExplicitPath $TailscaleExe
 
+    $authKey = ""
+    $authKeyUsed = $false
+
+    if (-not $SkipTailscaleServe -or $EnableFunnel) {
+        Ensure-TailscaleWindowsServiceRunning -SetAutomaticStartup $EnsureTailscaleAutomaticStartup
+
+        $authKey = Resolve-TailscaleAuthKey -KeyFilePath $TailscaleAuthKeyFile
+        if ($InitialTailscaleDelaySeconds -gt 0) {
+            Write-Host "Waiting $InitialTailscaleDelaySeconds s for Windows network before first tailscale up..."
+            Start-Sleep -Seconds $InitialTailscaleDelaySeconds
+        }
+        if ($authKey) {
+            [void](Invoke-TailscaleAuthKeyUp -TsExe $ts -AuthKey $authKey)
+            $authKeyUsed = $true
+        } else {
+            Invoke-TailscaleUpNoAuth -TsExe $ts
+        }
+    }
+
     Wait-WslReady `
         -WslExePath $WslExe `
         -Distro $DistroName `
@@ -378,23 +442,13 @@ try {
     Ensure-FirewallRule -Port $ListenPort
 
     if (-not $SkipTailscaleServe -or $EnableFunnel) {
-        Ensure-TailscaleWindowsServiceRunning -SetAutomaticStartup $EnsureTailscaleAutomaticStartup
-
-        $authKey = Resolve-TailscaleAuthKey -KeyFilePath $TailscaleAuthKeyFile
-        $authKeyUsed = $false
-        if ($authKey) {
-            Invoke-TailscaleAuthKeyUp -TsExe $ts -AuthKey $authKey
-            $authKeyUsed = $true
-        } else {
-            Invoke-TailscaleUpNoAuth -TsExe $ts
-        }
-
         Write-Host "Waiting for Tailscale daemon (avoid NoState / boot network race)..."
         Wait-TailscaleReady `
             -TsExe $ts `
             -MaxAttempts $TailscaleReadyMaxAttempts `
             -SleepSeconds $TailscaleReadySleepSeconds `
-            -AuthKeyWasUsed $authKeyUsed
+            -AuthKeyWasUsed $authKeyUsed `
+            -AuthKeyForRetry $authKey
     }
 
     if (-not $SkipTailscaleServe) {
