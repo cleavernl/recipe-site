@@ -54,6 +54,7 @@ Media uploads are served in production via **`login_required`** media routes in 
 
 ## Operational checks
 
+- After **`podman compose down` / `up` in WSL only:** re-run **`windows-startup.ps1`** (or the Task Scheduler job) on Windows so **`netsh` portproxy** matches the current WSL IPv4; otherwise Serve and **`localhost:8000`** on Windows can fail while WSL **`curl 127.0.0.1:8000`** still works.
 - After reboot: read `%LOCALAPPDATA%\recipe-site\startup.log` if containers are down.
 - In WSL: `podman ps`, `cd ~/recipe-home/recipe-site && podman-compose logs` (path as deployed).
 - Django: `manage.py` inside container for one-off admin (`createsuperuser`, etc.).

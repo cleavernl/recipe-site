@@ -122,6 +122,14 @@ Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one tha
 
 Production can deploy on **`v*`** tags using a self-hosted GitHub Actions runner; see `.github/workflows/deploy-on-tag.yml`. Set repository variable **`RECIPE_SITE_DEPLOY_PATH`** to the **same** absolute WSL path as **`-LinuxRepoRoot`** so reboot, manual compose, and CI deploy all agree.
 
+### After `podman compose` restarts in WSL only
+
+If you run **`podman compose down`** / **`up`** (or **`podman-compose …`**) **only inside WSL** and do **not** re-run **`windows-startup.ps1`** on Windows, **`netsh interface portproxy`** can still send **`0.0.0.0:8000`** to an **old WSL IPv4**. Then your **tailnet HTTPS URL** (Serve) and **`http://localhost:8000`** on **Windows** fail even when **`curl http://127.0.0.1:8000/`** inside **WSL** works.
+
+**Fix:** run the scheduled startup task (**Run**), or run **`windows-startup.ps1`** / the **bootstrap** from elevated PowerShell the same way Task Scheduler does, or reboot so that job runs. That refreshes portproxy to the current WSL address.
+
+**Quick check:** in WSL, **`hostname -I`** (use the address Windows should forward to—often the first). On Windows (PowerShell or `cmd`), **`netsh interface portproxy show v4tov4`** — the row listening on **8000** must use that same address as **`connectaddress`**.
+
 If Tailscale only works **after you sign in to Windows**, these causes are common:
 
 1. **Service startup:** The Tailscale **Windows service** may be **Manual** or only the **tray app** runs in your session. Open **`services.msc`**, find the Tailscale-related service, set **Startup type** to **Automatic** (or **Automatic (Delayed Start)**). The startup script also tries **Manual → Automatic** by default (`EnsureTailscaleAutomaticStartup`, default **true**); pass **`-EnsureTailscaleAutomaticStartup:$false`** on the **bootstrap** task arguments (it forwards to `windows-startup.ps1`) to skip that.
