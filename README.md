@@ -145,6 +145,8 @@ If Tailscale only works **after you sign in to Windows**, these causes are commo
 
 Without an auth key, if **`tailscale status`** stays on **“Tailscale is starting”** for about **45 × 5 seconds (~3.75 minutes)**, the script **stops with an error** pointing at the key file.
 
-The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
+The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If that file is **empty** after a failed run but Task Scheduler shows a non-zero last result, **`windows-startup.ps1` probably never started**; read **`%ProgramData%\recipe-site\bootstrap.log`** (written by **`windows-startup-bootstrap.ps1`**) for WSL wait / `wslpath` / path errors. Re-copy the bootstrap from your WSL checkout after `git pull` so logging changes apply.
+
+If containers do not start after reboot, open **`startup.log`** on the micro PC and read the error at the bottom.
 
 Override with **`-LogFile "D:\logs\recipe-site.txt"`** on the bootstrap (forwarded) or on a direct `windows-startup.ps1` run if you want a different path.

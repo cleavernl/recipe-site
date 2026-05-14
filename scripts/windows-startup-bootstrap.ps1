@@ -9,6 +9,9 @@
   C:\ProgramData\recipe-site\) and point Task Scheduler at it. The canonical
   repo (and windows-startup.ps1) live only under the WSL filesystem.
 
+  Diagnostics append to **%ProgramData%\recipe-site\bootstrap.log** (before the main
+  **startup.log** exists) so reboot failures are visible when the inner script never starts.
+
 .PARAMETER LinuxRepoRoot
   Absolute POSIX path to the repo root inside the distro (same tree as
   -WslProjectDir for windows-startup.ps1), e.g. /home/you/recipe-home/recipe-site
@@ -44,90 +47,121 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$WslExe = Join-Path $env:SystemRoot "System32\wsl.exe"
-if (-not (Test-Path -LiteralPath $WslExe)) {
-    throw "wsl.exe not found at $WslExe"
-}
-
-$root = ($LinuxRepoRoot.Trim() -replace '/$', '')
-if (-not $root.StartsWith("/")) {
-    throw "-LinuxRepoRoot must be an absolute path inside WSL (starting with /), got: $LinuxRepoRoot"
-}
-
-Write-Host "windows-startup-bootstrap: waiting for WSL distro '$DistroName'..."
-$ready = $false
-for ($attempt = 1; $attempt -le $WslBootMaxAttempts; $attempt++) {
-    $null = & $WslExe -d $DistroName -e true 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        $ready = $true
-        Write-Host "WSL responded on attempt $attempt."
-        break
+function Write-BootstrapDiag {
+    param([string]$Message)
+    try {
+        $dir = Join-Path $env:ProgramData "recipe-site"
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $path = Join-Path $dir "bootstrap.log"
+        Add-Content -LiteralPath $path -Value ("{0} {1}" -f (Get-Date -Format "o"), $Message)
+    } catch {
+        # Avoid failing the task because logging failed.
     }
-    Write-Host "WSL not up yet ($attempt / $WslBootMaxAttempts), sleeping ${WslBootSleepSeconds}s..."
-    Start-Sleep -Seconds $WslBootSleepSeconds
 }
 
-if (-not $ready) {
-    throw "WSL distro '$DistroName' did not start after $($WslBootMaxAttempts * $WslBootSleepSeconds) seconds."
-}
+try {
+    Write-BootstrapDiag ("bootstrap start user={0} distro={1} linuxRepoRoot={2}" -f `
+            [Environment]::UserName, $DistroName, $LinuxRepoRoot)
 
-$linuxMain = "$root/scripts/windows-startup.ps1"
-$wslpathOut = & $WslExe -d $DistroName wslpath -w $linuxMain 2>&1
-if ($LASTEXITCODE -ne 0) {
-    throw "wslpath failed for '$linuxMain': $wslpathOut"
-}
+    $WslExe = Join-Path $env:SystemRoot "System32\wsl.exe"
+    if (-not (Test-Path -LiteralPath $WslExe)) {
+        throw "wsl.exe not found at $WslExe"
+    }
 
-$winMain = ($wslpathOut | Out-String).Trim()
-if (-not (Test-Path -LiteralPath $winMain)) {
-    throw "Resolved main script path does not exist: $winMain (from $linuxMain)"
-}
+    $root = ($LinuxRepoRoot.Trim() -replace '/$', '')
+    if (-not $root.StartsWith("/")) {
+        throw "-LinuxRepoRoot must be an absolute path inside WSL (starting with /), got: $LinuxRepoRoot"
+    }
 
-Write-Host "Launching main script: $winMain"
+    Write-Host "windows-startup-bootstrap: waiting for WSL distro '$DistroName'..."
+    $ready = $false
+    for ($attempt = 1; $attempt -le $WslBootMaxAttempts; $attempt++) {
+        $null = & $WslExe -d $DistroName -e true 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $ready = $true
+            Write-Host "WSL responded on attempt $attempt."
+            Write-BootstrapDiag "WSL ready on attempt $attempt"
+            break
+        }
+        Write-BootstrapDiag "WSL probe attempt $attempt exit=$LASTEXITCODE"
+        Write-Host "WSL not up yet ($attempt / $WslBootMaxAttempts), sleeping ${WslBootSleepSeconds}s..."
+        Start-Sleep -Seconds $WslBootSleepSeconds
+    }
 
-$psArgs = @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", $winMain,
-    "-DistroName", $DistroName,
-    "-WslProjectDir", $root
-)
-if ($WslLinuxUser) {
-    $psArgs += @("-WslLinuxUser", $WslLinuxUser)
-}
+    if (-not $ready) {
+        throw "WSL distro '$DistroName' did not start after $($WslBootMaxAttempts * $WslBootSleepSeconds) seconds."
+    }
 
-if ($EnableFunnel) {
-    $psArgs += "-EnableFunnel"
-}
-if ($SkipTailscaleServe) {
-    $psArgs += "-SkipTailscaleServe"
-}
-if ($LogFile) {
-    $psArgs += @("-LogFile", $LogFile)
-}
-if ($TailscaleExe) {
-    $psArgs += @("-TailscaleExe", $TailscaleExe)
-}
-if ($TailscaleAuthKeyFile) {
-    $psArgs += @("-TailscaleAuthKeyFile", $TailscaleAuthKeyFile)
-}
-if ($null -ne $WslReadyMaxAttempts) {
-    $psArgs += @("-WslReadyMaxAttempts", $WslReadyMaxAttempts)
-}
-if ($null -ne $WslReadySleepSeconds) {
-    $psArgs += @("-WslReadySleepSeconds", $WslReadySleepSeconds)
-}
-if ($null -ne $InitialTailscaleDelaySeconds) {
-    $psArgs += @("-InitialTailscaleDelaySeconds", $InitialTailscaleDelaySeconds)
-}
-if ($null -ne $TailscaleReadyMaxAttempts) {
-    $psArgs += @("-TailscaleReadyMaxAttempts", $TailscaleReadyMaxAttempts)
-}
-if ($null -ne $TailscaleReadySleepSeconds) {
-    $psArgs += @("-TailscaleReadySleepSeconds", $TailscaleReadySleepSeconds)
-}
-if ($null -ne $EnsureTailscaleAutomaticStartup) {
-    $psArgs += @("-EnsureTailscaleAutomaticStartup:$EnsureTailscaleAutomaticStartup")
-}
+    $linuxMain = "$root/scripts/windows-startup.ps1"
+    $wslpathOut = & $WslExe -d $DistroName wslpath -w $linuxMain 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "wslpath failed for '$linuxMain': $wslpathOut"
+    }
 
-& powershell.exe @psArgs
-exit $LASTEXITCODE
+    $winMain = ($wslpathOut | Out-String).Trim()
+    Write-BootstrapDiag "resolved main script path: $winMain"
+    if (-not (Test-Path -LiteralPath $winMain)) {
+        throw "Resolved main script path does not exist: $winMain (from $linuxMain)"
+    }
+
+    Write-Host "Launching main script: $winMain"
+
+    $psArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $winMain,
+        "-DistroName", $DistroName,
+        "-WslProjectDir", $root
+    )
+    if ($WslLinuxUser) {
+        $psArgs += @("-WslLinuxUser", $WslLinuxUser)
+    }
+
+    if ($EnableFunnel) {
+        $psArgs += "-EnableFunnel"
+    }
+    if ($SkipTailscaleServe) {
+        $psArgs += "-SkipTailscaleServe"
+    }
+    if ($LogFile) {
+        $psArgs += @("-LogFile", $LogFile)
+    }
+    if ($TailscaleExe) {
+        $psArgs += @("-TailscaleExe", $TailscaleExe)
+    }
+    if ($TailscaleAuthKeyFile) {
+        $psArgs += @("-TailscaleAuthKeyFile", $TailscaleAuthKeyFile)
+    }
+    if ($null -ne $WslReadyMaxAttempts) {
+        $psArgs += @("-WslReadyMaxAttempts", $WslReadyMaxAttempts)
+    }
+    if ($null -ne $WslReadySleepSeconds) {
+        $psArgs += @("-WslReadySleepSeconds", $WslReadySleepSeconds)
+    }
+    if ($null -ne $InitialTailscaleDelaySeconds) {
+        $psArgs += @("-InitialTailscaleDelaySeconds", $InitialTailscaleDelaySeconds)
+    }
+    if ($null -ne $TailscaleReadyMaxAttempts) {
+        $psArgs += @("-TailscaleReadyMaxAttempts", $TailscaleReadyMaxAttempts)
+    }
+    if ($null -ne $TailscaleReadySleepSeconds) {
+        $psArgs += @("-TailscaleReadySleepSeconds", $TailscaleReadySleepSeconds)
+    }
+    if ($null -ne $EnsureTailscaleAutomaticStartup) {
+        $psArgs += @("-EnsureTailscaleAutomaticStartup:$EnsureTailscaleAutomaticStartup")
+    }
+
+    Write-BootstrapDiag ("launching inner powershell; arg count={0}" -f $psArgs.Count)
+    & powershell.exe @psArgs
+    $innerExit = $LASTEXITCODE
+    Write-BootstrapDiag "inner powershell exit code: $innerExit"
+    exit $innerExit
+} catch {
+    Write-BootstrapDiag ("FATAL: {0}" -f $_.Exception.Message)
+    if ($_.ScriptStackTrace) {
+        Write-BootstrapDiag $_.ScriptStackTrace
+    }
+    exit 1
+}
