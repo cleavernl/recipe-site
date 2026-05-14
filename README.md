@@ -113,14 +113,11 @@ If Tailscale only works **after you sign in to Windows**, two things are common:
 2. **Stored login not loaded until a user session:** Even with the service **Automatic**, Windows may not apply your Tailscale **OAuth/device login** until someone signs in (profile / credential storage). Your **`startup.log`** can show **“Tailscale is starting”** for **many minutes** (e.g. 60+ attempts × 5s) and then succeed—**or** it may never finish until login. For a PC that must work **with no one at the desktop**, use a **Tailscale auth key** (non-interactive):
 
    - In the [Tailscale admin keys](https://login.tailscale.com/admin/settings/keys) page, create a **reusable** auth key (note expiry and tailnet policy).
-   - On the mini PC, store the key **only** in a file with tight ACLs, e.g. **`C:\ProgramData\recipe-site\tailscale-authkey.txt`** (one line, no trailing spaces), readable only by **Administrators** (and the account that runs the task).
-   - Add to the scheduled task arguments: **`-TailscaleAuthKeyFile "C:\ProgramData\recipe-site\tailscale-authkey.txt"`**  
-     Or set a **machine or user** environment variable **`RECIPE_SITE_TAILSCALE_AUTHKEY`** (less ideal; avoid logging it).  
+   - On the mini PC, store the key **only** in a file with tight ACLs: **`C:\ProgramData\recipe-site\tailscale-authkey.txt`** (one line, no trailing spaces), readable only by **Administrators** (and the account that runs the task). Create the **`recipe-site`** folder if needed.
+   - The startup script **reads that path automatically** (you do **not** need `-TailscaleAuthKeyFile` unless you use a different location). Alternatively pass **`-TailscaleAuthKeyFile "D:\path\to\key.txt"`** or set **`RECIPE_SITE_TAILSCALE_AUTHKEY`** for the scheduled task (less ideal; avoid logging it).
    - The script runs **`tailscale up --authkey …`** once before waiting on **`tailscale status`**. **Never commit the key** to git.
 
-Without an auth key, you can instead **increase** **`-TailscaleReadyMaxAttempts`** and the task **startup delay** so the script keeps polling long enough (your logs show success after ~30–70 attempts at 5s in some runs).
-
-If **`startup.log`** shows **`unexpected state: NoState`** or **`Tailscale is starting`** for a long time, the task may have run before the daemon or network was ready. During boot, **`You are logged out`** next to **`context canceled`** is often **transient**. The script **starts the Tailscale service**, then **polls** `tailscale status` (default up to **90 × 5 seconds**). Increase the Task Scheduler **startup delay** or **`-TailscaleReadyMaxAttempts`** / **`-TailscaleReadySleepSeconds`** if needed.
+Without an auth key, the script runs **`tailscale up`** once (no key) to nudge reconnect, then waits. If **`tailscale status`** stays on **“Tailscale is starting”** for about **45 × 5 seconds (~3.75 minutes)** with **no** auth key configured, it **stops with an error** (instead of waiting the full budget) and tells you to add the key file above. You can raise that budget with **`-TailscaleReadyMaxAttempts`** (default **120**) if you truly rely on OAuth-only and slow networks.
 
 The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
 
