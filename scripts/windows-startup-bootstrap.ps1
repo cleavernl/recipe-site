@@ -75,23 +75,28 @@ try {
         throw "-LinuxRepoRoot must be an absolute path inside WSL (starting with /), got: $LinuxRepoRoot"
     }
 
-    Write-Host "windows-startup-bootstrap: waiting for WSL distro '$DistroName'..."
+    Write-Host "windows-startup-bootstrap: waiting for WSL distro '$DistroName' (1s polls, budget $($WslBootMaxAttempts * [Math]::Max(1, $WslBootSleepSeconds))s)..."
+    $pollSeconds = 1
+    $maxWaitSeconds = $WslBootMaxAttempts * [Math]::Max(1, $WslBootSleepSeconds)
+    $deadline = (Get-Date).AddSeconds($maxWaitSeconds)
     $ready = $false
-    for ($attempt = 1; $attempt -le $WslBootMaxAttempts; $attempt++) {
+    $attempt = 0
+    while ((Get-Date) -lt $deadline) {
+        $attempt++
         $null = & $WslExe -d $DistroName -e true 2>&1
         if ($LASTEXITCODE -eq 0) {
             $ready = $true
-            Write-Host "WSL responded on attempt $attempt."
-            Write-BootstrapDiag "WSL ready on attempt $attempt"
+            Write-Host "WSL responded on poll $attempt."
+            Write-BootstrapDiag "WSL ready on poll $attempt"
             break
         }
-        Write-BootstrapDiag "WSL probe attempt $attempt exit=$LASTEXITCODE"
-        Write-Host "WSL not up yet ($attempt / $WslBootMaxAttempts), sleeping ${WslBootSleepSeconds}s..."
-        Start-Sleep -Seconds $WslBootSleepSeconds
+        Write-BootstrapDiag "WSL probe poll $attempt exit=$LASTEXITCODE"
+        Write-Host "WSL not up yet (poll $attempt, budget ${maxWaitSeconds}s)..."
+        Start-Sleep -Seconds $pollSeconds
     }
 
     if (-not $ready) {
-        throw "WSL distro '$DistroName' did not start after $($WslBootMaxAttempts * $WslBootSleepSeconds) seconds."
+        throw "WSL distro '$DistroName' did not start within $maxWaitSeconds seconds."
     }
 
     $linuxMain = "$root/scripts/windows-startup.ps1"
