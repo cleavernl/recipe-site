@@ -13,6 +13,10 @@
   Absolute POSIX path to the repo root inside the distro (same tree as
   -WslProjectDir for windows-startup.ps1), e.g. /home/you/recipe-home/recipe-site
 
+  Optional parameters such as -EnableFunnel, -SkipTailscaleServe, -LogFile, -TailscaleExe,
+  WSL/Tailscale wait tuning, and -EnsureTailscaleAutomaticStartup are forwarded to
+  windows-startup.ps1 when you pass them (omit to use that script's defaults).
+
 .EXAMPLE
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\recipe-site\windows-startup-bootstrap.ps1 `
     -LinuxRepoRoot /home/you/recipe-home/recipe-site
@@ -23,7 +27,18 @@ param(
     [string]$LinuxRepoRoot,
     [string]$WslLinuxUser = "",
     [int]$WslBootMaxAttempts = 90,
-    [int]$WslBootSleepSeconds = 2
+    [int]$WslBootSleepSeconds = 2,
+    [switch]$EnableFunnel,
+    [switch]$SkipTailscaleServe,
+    [string]$LogFile = "",
+    [string]$TailscaleExe = "",
+    [string]$TailscaleAuthKeyFile = "",
+    [Nullable[int]]$WslReadyMaxAttempts = $null,
+    [Nullable[int]]$WslReadySleepSeconds = $null,
+    [Nullable[int]]$InitialTailscaleDelaySeconds = $null,
+    [Nullable[int]]$TailscaleReadyMaxAttempts = $null,
+    [Nullable[int]]$TailscaleReadySleepSeconds = $null,
+    [Nullable[bool]]$EnsureTailscaleAutomaticStartup = $null
 )
 
 Set-StrictMode -Version Latest
@@ -78,6 +93,40 @@ $psArgs = @(
 )
 if ($WslLinuxUser) {
     $psArgs += @("-WslLinuxUser", $WslLinuxUser)
+}
+
+if ($EnableFunnel) {
+    $psArgs += "-EnableFunnel"
+}
+if ($SkipTailscaleServe) {
+    $psArgs += "-SkipTailscaleServe"
+}
+if ($LogFile) {
+    $psArgs += @("-LogFile", $LogFile)
+}
+if ($TailscaleExe) {
+    $psArgs += @("-TailscaleExe", $TailscaleExe)
+}
+if ($TailscaleAuthKeyFile) {
+    $psArgs += @("-TailscaleAuthKeyFile", $TailscaleAuthKeyFile)
+}
+if ($null -ne $WslReadyMaxAttempts) {
+    $psArgs += @("-WslReadyMaxAttempts", $WslReadyMaxAttempts)
+}
+if ($null -ne $WslReadySleepSeconds) {
+    $psArgs += @("-WslReadySleepSeconds", $WslReadySleepSeconds)
+}
+if ($null -ne $InitialTailscaleDelaySeconds) {
+    $psArgs += @("-InitialTailscaleDelaySeconds", $InitialTailscaleDelaySeconds)
+}
+if ($null -ne $TailscaleReadyMaxAttempts) {
+    $psArgs += @("-TailscaleReadyMaxAttempts", $TailscaleReadyMaxAttempts)
+}
+if ($null -ne $TailscaleReadySleepSeconds) {
+    $psArgs += @("-TailscaleReadySleepSeconds", $TailscaleReadySleepSeconds)
+}
+if ($null -ne $EnsureTailscaleAutomaticStartup) {
+    $psArgs += @("-EnsureTailscaleAutomaticStartup:$EnsureTailscaleAutomaticStartup")
 }
 
 & powershell.exe @psArgs

@@ -16,7 +16,7 @@ This record captures environment facts that are not obvious from code alone and 
 | WSL2 | Podman rootless, compose project, bind `0.0.0.0:8000` for the web container |
 | Container | Gunicorn per `scripts/start-web.sh`; SQLite + media on named volumes per `compose.yaml` |
 
-**Typical WSL project path (production):** `~/recipe-home/recipe-site` (see `scripts/windows-startup.ps1` default `-WslProjectDir`). Development on other machines may use a different path (e.g. isolated `recipe-site-home`); do not assume one path for all environments.
+**Typical WSL project path (production):** `~/recipe-home/recipe-site` (see `scripts/windows-startup.ps1` default `-WslProjectDir`). Prefer a **single** clone under WSL for compose, `windows-startup.ps1`, and tag-based deploy (**`RECIPE_SITE_DEPLOY_PATH`**); use **`windows-startup-bootstrap.ps1`** on NTFS for Task Scheduler’s first **`-File`** hop (README). Development on other machines may use a different path (e.g. isolated `recipe-site-home`); do not assume one path for all environments.
 
 **Windows → WSL reachability:** External and tailnet clients often hit the **Windows** Tailscale IP or Funnel URL. Traffic to port **8000** on Windows is forwarded into WSL via **`netsh interface portproxy`** (listen `0.0.0.0:8000` → current WSL IPv4). WSL’s address can change after reboot; the startup script refreshes portproxy each run.
 
@@ -46,10 +46,11 @@ Media uploads are served in production via **`login_required`** media routes in 
 
 - **`scripts/wsl-start-stack.sh`:** Runs `podman-compose up -d` (or `podman compose`) from the project root inside WSL.
 - **`scripts/windows-startup.ps1`:** Resolves **`tailscale.exe`**, then **Tailscale service + optional delay + `tailscale up` (auth key first)** so the mesh can connect **while** WSL starts; then WSL compose, portproxy, firewall; **`tailscale status` wait** with periodic **`tailscale up`** retries and throttled **service restarts** if stuck on “starting”; then Serve/Funnel. Default **`InitialTailscaleDelaySeconds`** 45; **`TailscaleReadyMaxAttempts`** 150. Transcript **`%LOCALAPPDATA%\recipe-site\startup.log`**.
+- **`scripts/windows-startup-bootstrap.ps1`:** Small NTFS-resident entry for Task Scheduler; waits until WSL answers, then runs **`windows-startup.ps1`** from the Linux-side clone via **`\\wsl$\…`** and forwards **`LinuxRepoRoot`** as **`-WslProjectDir`**. Copy to **`%ProgramData%\recipe-site\`** (or similar) and point the task at that path—**not** at **`\\wsl$\…\windows-startup.ps1`** as the task’s first **`-File`** (cold-boot race before the share is available). See README **Windows Reboot Startup**.
 
-**Headless operation (no interactive Windows logon):** Use Task Scheduler **Run whether user is logged on or not** with the **same Windows account** that owns the WSL distro and rootless Podman (not **SYSTEM**). Use an **At startup** trigger with a **90–120 s delay** and optionally longer WSL polling (`-WslReadyMaxAttempts` / `-WslReadySleepSeconds`). **BitLocker** or other pre-boot unlock may still be required once per power-on; this only removes the need for a **Windows desktop sign-in**.
+**Headless operation (no interactive Windows logon):** Use Task Scheduler **Run whether user is logged on or not** with the **same Windows account** that owns the WSL distro and rootless Podman (not **SYSTEM**). Use an **At startup** trigger with a **90–120 s delay** and optionally longer WSL polling (`-WslReadyMaxAttempts` / `-WslReadySleepSeconds` on the bootstrap so they reach **`windows-startup.ps1`**). **BitLocker** or other pre-boot unlock may still be required once per power-on; this only removes the need for a **Windows desktop sign-in**.
 
-**Task Scheduler pitfalls:** Tasks that run as **SYSTEM** often fail for WSL + rootless Podman. Prefer the deployment **user** in all cases; choose **log on** vs **startup + run whether logged on or not** per README section A vs B.
+**Task Scheduler pitfalls:** Tasks that run as **SYSTEM** often fail for WSL + rootless Podman. Prefer the deployment **user** in all cases; choose **log on** vs **startup + run whether logged on or not** per README pattern A vs B. Prefer **one git clone under WSL** for production compose and scripts; avoid relying on a separate **`C:\`** clone that only exists so the task has a Windows **`-File`** path.
 
 ## Operational checks
 
@@ -59,4 +60,4 @@ Media uploads are served in production via **`login_required`** media routes in 
 
 ## Consequences
 
-Changes to compose ports, WSL distro name, or Tailscale CLI flags must stay consistent across `windows-startup.ps1`, README, and operator runbooks. New ingress paths require updating `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` and testing HTTPS redirect behavior behind the proxy.
+Changes to compose ports, WSL distro name, or Tailscale CLI flags must stay consistent across `windows-startup.ps1`, `windows-startup-bootstrap.ps1`, README, and operator runbooks. New ingress paths require updating `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` and testing HTTPS redirect behavior behind the proxy.

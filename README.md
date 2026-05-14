@@ -70,15 +70,29 @@ If you deploy on a Windows mini PC with WSL, use `scripts/windows-startup.ps1` t
 - starts **Tailscale Serve** (`https` on port 443 proxied to `http://127.0.0.1:8000`) unless you pass `-SkipTailscaleServe`,
 - optionally re-enables Tailscale Funnel.
 
-The default WSL project directory is `~/recipe-home/recipe-site`. Override with `-WslProjectDir` if your clone lives elsewhere.
+The default WSL project directory is `~/recipe-home/recipe-site`. Override with `-WslProjectDir` if your clone lives elsewhere (use the same value you pass to the bootstrap as `-LinuxRepoRoot`, expressed as an absolute POSIX path such as `/home/you/recipe-home/recipe-site`).
 
-Run from elevated PowerShell:
+### Recommended layout: one clone under WSL
+
+Keep **one** canonical git clone **inside WSL** (for example `~/recipe-home/recipe-site`) for both Podman Compose and these scripts. Task Scheduler should **not** rely on a second full clone on `C:\` just so `-File` has a Windows path; that second tree can drift from what actually runs in WSL.
+
+### Task Scheduler: start from NTFS (`windows-startup-bootstrap.ps1`)
+
+The scheduled task’s **first** `-File` target must live on **NTFS** (for example under **`%ProgramData%\recipe-site\`**). Use `scripts/windows-startup-bootstrap.ps1`: it waits until `wsl.exe` can run in your distro, resolves `windows-startup.ps1` on the `\\wsl$\…` share, then launches that script with `-WslProjectDir` set to your WSL repo root.
+
+Do **not** point the task directly at `\\wsl$\…\windows-startup.ps1`: at cold boot Windows may try to read that path **before** WSL serves the share, and the task can fail immediately.
+
+**Install the bootstrap once (and after rare edits):** copy `scripts/windows-startup-bootstrap.ps1` from your WSL checkout to something like **`C:\ProgramData\recipe-site\windows-startup-bootstrap.ps1`**.
+
+Run the main script manually from elevated PowerShell (for debugging, after WSL is already up):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-startup.ps1 -DistroName Ubuntu -WslProjectDir "~/recipe-home/recipe-site" -EnableFunnel
 ```
 
-To run it automatically after reboot, use **Task Scheduler**. Pick **one** pattern:
+Or call the main script via the `\\wsl$\…` path to your Linux clone, with a matching absolute `-WslProjectDir` (recommended for clarity).
+
+To run startup automatically after reboot, use **Task Scheduler**. Pick **one** pattern:
 
 ### A — Site up without logging in to Windows (headless / update reboots)
 
@@ -90,25 +104,27 @@ Use this when the PC should serve the site after a **cold boot or Windows Update
   - Check **Run with highest privileges**
   - Windows will store your password once for this task (normal for background user tasks).
 - **Trigger:** **At startup** (or **At log on** if you prefer), with a **delay of 90–120 seconds** so WSL and networking can finish coming up.
-- **Actions:** **Program:** `powershell.exe` — **Arguments** (one line; adjust paths and options):
+- **Actions:** **Program:** `powershell.exe` — **Arguments** (one line; set `-LinuxRepoRoot` to the **absolute path inside WSL** to your repo root—the same tree Podman uses):
 
 ```text
--ExecutionPolicy Bypass -File C:\path\to\recipe-site\scripts\windows-startup.ps1 -DistroName Ubuntu -WslLinuxUser YOUR_WSL_UNIX_USER -EnableFunnel -WslReadyMaxAttempts 90 -WslReadySleepSeconds 3
+-NoProfile -ExecutionPolicy Bypass -File "C:\ProgramData\recipe-site\windows-startup-bootstrap.ps1" -LinuxRepoRoot /home/YOU/recipe-home/recipe-site -DistroName Ubuntu -WslLinuxUser YOUR_WSL_UNIX_USER -EnableFunnel -WslReadyMaxAttempts 90 -WslReadySleepSeconds 3
 ```
 
-Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one that owns `~/recipe-home/recipe-site`). Omit `-WslLinuxUser ...` if the distro default user is already correct. Add `-TailscaleExe "C:\Program Files\Tailscale\tailscale.exe"` only if the log says `tailscale.exe not found` (scheduled tasks sometimes have a minimal `PATH`).
+Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one that owns the repo). Omit `-WslLinuxUser ...` if the distro default user is already correct. Omit **`-EnableFunnel`** if you do not want Funnel. Add **`-TailscaleExe "C:\Program Files\Tailscale\tailscale.exe"`** only if the log says `tailscale.exe not found` (scheduled tasks sometimes have a minimal `PATH`).
 
 ### B — Only after you sign in (simpler debugging)
 
-- **Trigger:** **At log on** for your account.
+- **Trigger:** **At log on** for your account (or **At startup** with **Run only when user is logged on** if you use auto-logon and always have a session).
 - **General:** **Run only when user is logged on**, **Run with highest privileges**, optional **30–60 s** delay.
-- Same **Actions** line as pattern A (you can drop the longer WSL wait if startup is reliable).
+- Same **Actions** line as pattern A.
 
-Use the real Windows path to `scripts\windows-startup.ps1`. If the repo path differs inside WSL, set `-WslProjectDir "~/recipe-home/recipe-site"`.
+### Tag-based deploy (optional)
+
+Production can deploy on **`v*`** tags using a self-hosted GitHub Actions runner; see `.github/workflows/deploy-on-tag.yml`. Set repository variable **`RECIPE_SITE_DEPLOY_PATH`** to the **same** absolute WSL path as **`-LinuxRepoRoot`** so reboot, manual compose, and CI deploy all agree.
 
 If Tailscale only works **after you sign in to Windows**, these causes are common:
 
-1. **Service startup:** The Tailscale **Windows service** may be **Manual** or only the **tray app** runs in your session. Open **`services.msc`**, find the Tailscale-related service, set **Startup type** to **Automatic** (or **Automatic (Delayed Start)**). The startup script also tries **Manual → Automatic** by default (`EnsureTailscaleAutomaticStartup`, default **true**); pass **`-EnsureTailscaleAutomaticStartup:$false`** to skip that.
+1. **Service startup:** The Tailscale **Windows service** may be **Manual** or only the **tray app** runs in your session. Open **`services.msc`**, find the Tailscale-related service, set **Startup type** to **Automatic** (or **Automatic (Delayed Start)**). The startup script also tries **Manual → Automatic** by default (`EnsureTailscaleAutomaticStartup`, default **true**); pass **`-EnsureTailscaleAutomaticStartup:$false`** on the **bootstrap** task arguments (it forwards to `windows-startup.ps1`) to skip that.
 
 2. **Stored login not loaded until a user session:** Even with the service **Automatic**, Windows may not apply your Tailscale **OAuth/device login** until someone signs in (profile / credential storage). Your **`startup.log`** can show **“Tailscale is starting”** for **many minutes** (e.g. 60+ attempts × 5s) and then succeed—**or** it may never finish until login. For a PC that must work **with no one at the desktop**, use a **Tailscale auth key** (non-interactive):
 
@@ -117,10 +133,10 @@ If Tailscale only works **after you sign in to Windows**, these causes are commo
    - The startup script **reads that path automatically** (you do **not** need `-TailscaleAuthKeyFile` unless you use a different location). Alternatively pass **`-TailscaleAuthKeyFile "D:\path\to\key.txt"`** or set **`RECIPE_SITE_TAILSCALE_AUTHKEY`** for the scheduled task (less ideal; avoid logging it).
    - The script **starts the Tailscale service**, waits **`InitialTailscaleDelaySeconds`** (default **45**) for DHCP/policy network, then runs **`tailscale up --authkey …`** **before** WSL/Podman so the daemon can connect while the stack starts. It logs **`tailscale up exit code:`** (check for non-zero). While waiting, it **re-runs** `tailscale up` every **15** status polls and may **restart the Tailscale service** around attempts **36** and **72** if still stuck on “starting”. **Never commit the key** to git.
 
-3. **Still stuck until you sign in even with an auth key:** Some Windows builds defer full connectivity or vault access until an **interactive logon**. Mitigations: increase the Task Scheduler **startup delay** (e.g. **5–10 minutes**); pass **`-InitialTailscaleDelaySeconds 120`**; increase **`-TailscaleReadyMaxAttempts`** (default **150**); enable Group Policy **Computer Configuration → Administrative Templates → System → Logon → “Always wait for the network at computer startup and logon”**; last resort **auto-logon** for a dedicated service account (security tradeoff).
+3. **Still stuck until you sign in even with an auth key:** Some Windows builds defer full connectivity or vault access until an **interactive logon**. Mitigations: increase the Task Scheduler **startup delay** (e.g. **5–10 minutes**); pass **`-InitialTailscaleDelaySeconds 120`** and **`-TailscaleReadyMaxAttempts 200`** (or similar) on the **bootstrap** line so they forward into `windows-startup.ps1`; enable Group Policy **Computer Configuration → Administrative Templates → System → Logon → “Always wait for the network at computer startup and logon”**; last resort **auto-logon** for a dedicated service account (security tradeoff).
 
 Without an auth key, if **`tailscale status`** stays on **“Tailscale is starting”** for about **45 × 5 seconds (~3.75 minutes)**, the script **stops with an error** pointing at the key file.
 
 The script writes a transcript to **`%LOCALAPPDATA%\recipe-site\startup.log`**. If containers do not start after reboot, open that file on the micro PC and read the error at the bottom.
 
-Override with `-LogFile "D:\logs\recipe-site.txt"` if you want a different path.
+Override with **`-LogFile "D:\logs\recipe-site.txt"`** on the bootstrap (forwarded) or on a direct `windows-startup.ps1` run if you want a different path.
