@@ -113,6 +113,10 @@ if env_bool("DJANGO_SECURE_SSL"):
     # Respect HTTPS indication from a reverse proxy (e.g., Tailscale Serve)
     # so Django doesn't enter a redirect loop when TLS terminates upstream.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    # Serve sends X-Forwarded-Host (MagicDNS name). Without this, get_host() is
+    # 127.0.0.1:8000 and SECURE_SSL_REDIRECT emits Location: https://127.0.0.1:8000/,
+    # which breaks browsers (TLS on an HTTP-only port) and shows as PR_END_OF_FILE.
+    USE_X_FORWARDED_HOST = True
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

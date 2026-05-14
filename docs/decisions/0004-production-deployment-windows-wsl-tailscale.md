@@ -38,7 +38,7 @@ Operators must set at least:
 - Strong `DJANGO_SECRET_KEY`
 - `DJANGO_ALLOWED_HOSTS` including localhost, `127.0.0.1`, the machine’s **Tailscale IP** (`100.x.x.x`), and the **MagicDNS hostname** (e.g. `phantom.tailXXXXXX.ts.net`)
 - `DJANGO_CSRF_TRUSTED_ORIGINS` with matching `http://` and `https://` origins (including `https://<magicdns>/` when using Serve)
-- `DJANGO_SECURE_SSL=true` when serving user traffic over HTTPS (Serve/Funnel). The app sets `SECURE_PROXY_SSL_HEADER` for `X-Forwarded-Proto` so Django does not redirect-loop behind TLS-terminating proxies.
+- `DJANGO_SECURE_SSL=true` when serving user traffic over HTTPS (Serve/Funnel). The app sets `SECURE_PROXY_SSL_HEADER` for `X-Forwarded-Proto` and **`USE_X_FORWARDED_HOST`** so Django honors Tailscale’s **`X-Forwarded-Host`** (MagicDNS name). Without the latter, redirects can target **`https://127.0.0.1:8000/`**, which breaks browsers (TLS on an HTTP-only port). Ensure **`DJANGO_ALLOWED_HOSTS`** / **`DJANGO_CSRF_TRUSTED_ORIGINS`** include the MagicDNS hostname.
 
 Media uploads are served in production via **`login_required`** media routes in `config/urls.py` (not `DEBUG`-only `static()`).
 
