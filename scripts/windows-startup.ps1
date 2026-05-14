@@ -16,6 +16,12 @@ param(
     [int]$InitialTailscaleDelaySeconds = 45
 )
 
+# Task Scheduler: do not use -File \\wsl$\<distro>\...\windows-startup.ps1 as the task's
+# primary script. At boot, \\wsl$\ may be unreadable until WSL is running. Keep a small
+# copy of scripts/windows-startup-bootstrap.ps1 on NTFS (e.g. under %ProgramData%) and
+# point the scheduled task at that file; it waits for WSL then runs this script from the
+# Linux-side clone (single repo tree under WSL for app + these scripts).
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 

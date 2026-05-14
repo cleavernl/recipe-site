@@ -1,0 +1,42 @@
+# Deploy production on Phantom when a version tag is pushed.
+#
+# Prerequisites (operator setup, not automatic):
+# - Self-hosted runner in WSL on Phantom with labels: self-hosted, recipe-site-phantom
+# - Repository variable RECIPE_SITE_DEPLOY_PATH = absolute WSL path to the production
+#   git clone (e.g. /home/you/recipe-home/recipe-site). This must be the SAME tree that
+#   scripts/windows-startup.ps1 uses: Task Scheduler (or your wrapper) should pass
+#   -WslProjectDir that resolves to this path (default in the script is ~/recipe-home/recipe-site).
+#   If auto-start and Actions update different clones, reboots will run old compose files.
+# - That clone's git remote must allow fetch (SSH key or HTTPS credential for the runner user)
+
+name: Deploy on tag
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, recipe-site-phantom]
+    steps:
+      - name: Checkout tag and restart containers
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR='${{ vars.RECIPE_SITE_DEPLOY_PATH }}'
+          if [ -z "$DEPLOY_DIR" ]; then
+            echo "Missing Actions variable RECIPE_SITE_DEPLOY_PATH (Repository Settings → Secrets and variables → Actions → Variables)."
+            exit 1
+          fi
+          cd "$DEPLOY_DIR"
+          git fetch --tags origin
+          git checkout "${{ github.ref_name }}"
+          if command -v podman-compose >/dev/null 2>&1; then
+            podman-compose up -d --build
+          else
+            podman compose up -d --build
+          fi

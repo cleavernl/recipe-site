@@ -1,6 +1,6 @@
 ---
 description: Production deployment on Windows + WSL + Tailscale
-globs: scripts/windows-startup.ps1,scripts/wsl-start-stack.sh,compose.yaml,docs/decisions/0004*.md
+globs: scripts/windows-startup.ps1,scripts/windows-startup-bootstrap.ps1,scripts/wsl-start-stack.sh,compose.yaml,docs/decisions/0004*.md
 alwaysApply: false
 ---
 
