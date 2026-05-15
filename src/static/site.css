@@ -1483,7 +1483,10 @@ form p {
   }
 
   .site-header {
-    position: static;
+    /* `position: static` drops z-index, so .hero (children z-index: 1) can cover the settings panel. */
+    position: relative;
+    top: auto;
+    z-index: 15;
   }
 
   .search {

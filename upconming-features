@@ -1,5 +1,9 @@
 - Import recipe from URL
 - Tag recipes and filter by tags
+- Sort recipes by things like cook time, rating, etc.
+- Add a "randomize" button that picks a random recipe
+- Move the ingredients chart to make the ingredient always listed on the left side and the amount + note on the right
 - Add a "make it" mode where you can check things off
     - We can store a log of who made recipes when
     - We can order the default sorting of the home page with the recipes made most recently
+- Add an export to AnyList option
