@@ -15,3 +15,5 @@ Headless boot: Task Scheduler should run **`windows-startup-bootstrap.ps1`** fro
 ## Tag deploy and Tailscale Serve (502)
 
 **`.github/workflows/deploy-on-tag.yml`** only rebuilds/restarts **Podman in WSL**. It does **not** run **`windows-startup.ps1`**, so **`netsh interface portproxy`** on Windows is unchanged. If the WSL primary IPv4 changed (or portproxy was never correct), **Tailscale Serve** to **`http://127.0.0.1:8000`** can get **502** even when the app answers **`curl http://127.0.0.1:8000/`** from inside WSL. Operators should re-run the **scheduled startup task** (or **`windows-startup.ps1`**) after tag deploy when Serve breaks; see README **After `podman compose` restarts in WSL only**. The workflow runs **`scripts/wsl-wait-for-web.sh`** so a failed container boot fails the job instead of leaving a silent 502.
+
+**Portproxy matches but still 502:** rootless **`ports:`** publish is often only on **`127.0.0.1`** inside WSL while **`netsh`** targets the **WSL eth0** IP—use **`network_mode: host`** for `web` in **`compose.yaml`** (see decision **0004**).

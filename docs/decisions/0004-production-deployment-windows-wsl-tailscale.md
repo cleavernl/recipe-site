@@ -13,12 +13,14 @@ This record captures environment facts that are not obvious from code alone and 
 | Layer | Role |
 |--------|------|
 | Windows host | Tailscale client, Task Scheduler, `netsh` portproxy, Windows Firewall |
-| WSL2 | Podman rootless, compose project, bind `0.0.0.0:8000` for the web container |
+| WSL2 | Podman rootless, compose project; **`compose.yaml` uses `network_mode: host`** so Gunicorn listens on the real WSL interfaces (not only a rootless port-forward on `127.0.0.1`) |
 | Container | Gunicorn per `scripts/start-web.sh`; SQLite + media on named volumes per `compose.yaml` |
 
 **Typical WSL project path (production):** `~/recipe-home/recipe-site` (see `scripts/windows-startup.ps1` default `-WslProjectDir`). Prefer a **single** clone under WSL for compose, `windows-startup.ps1`, and tag-based deploy (**`RECIPE_SITE_DEPLOY_PATH`**); use **`windows-startup-bootstrap.ps1`** on NTFS for Task Scheduler’s first **`-File`** hop (README). Development on other machines may use a different path (e.g. isolated `recipe-site-home`); do not assume one path for all environments.
 
 **Windows → WSL reachability:** External and tailnet clients often hit the **Windows** Tailscale IP or Funnel URL. Traffic to port **8000** on Windows is forwarded into WSL via **`netsh interface portproxy`** (listen `0.0.0.0:8000` → current WSL IPv4). WSL’s address can change after reboot; the startup script refreshes portproxy each run.
+
+**Rootless Podman + portproxy:** Published ports (`ports: 8000:8000`) are often reachable only on **`127.0.0.1`** inside WSL, while portproxy sends to the **WSL eth0** address—**Tailscale Serve then returns 502** even when `curl http://127.0.0.1:8000/` works inside WSL. **`network_mode: host`** in `compose.yaml` avoids that split. If you change networking, re-run **`windows-startup.ps1`** after compose so portproxy still matches the current WSL IPv4.
 
 **Firewall:** A Private-profile inbound rule allows TCP **8000** (display name pattern `Recipe Site WSL Port 8000`).
 

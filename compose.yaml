@@ -3,14 +3,16 @@ services:
     build:
       context: .
       dockerfile: Containerfile
+    # Rootless port publish often listens only on 127.0.0.1 inside WSL; Windows netsh portproxy
+    # targets the WSL *eth0* IP, so traffic never reaches the container. Host network binds :8000
+    # on the real WSL interfaces (see docs/decisions/0004).
+    network_mode: host
     restart: unless-stopped
     environment:
       # Image build already runs collectstatic; omitting the runtime pass reduces cold start time.
       WEB_SKIP_START_COLLECTSTATIC: "1"
     env_file:
       - .env
-    ports:
-      - "8000:8000"
     volumes:
       - recipe_data:/app/data
       - recipe_media:/app/media
