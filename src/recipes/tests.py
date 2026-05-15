@@ -66,7 +66,7 @@ class RecipeWorkflowTests(TestCase):
                 "cook_time_minutes": "30",
                 "servings": "6",
                 "source_url": "https://example.com/soup",
-                "ingredients-TOTAL_FORMS": "3",
+                "ingredients-TOTAL_FORMS": "1",
                 "ingredients-INITIAL_FORMS": "0",
                 "ingredients-MIN_NUM_FORMS": "0",
                 "ingredients-MAX_NUM_FORMS": "1000",
@@ -74,7 +74,7 @@ class RecipeWorkflowTests(TestCase):
                 "ingredients-0-name": "tomatoes",
                 "ingredients-0-notes": "large",
                 "ingredients-0-order": "1",
-                "steps-TOTAL_FORMS": "4",
+                "steps-TOTAL_FORMS": "1",
                 "steps-INITIAL_FORMS": "0",
                 "steps-MIN_NUM_FORMS": "0",
                 "steps-MAX_NUM_FORMS": "1000",
@@ -99,7 +99,7 @@ class RecipeWorkflowTests(TestCase):
         response = self.client.get(reverse("recipes:create"))
         content = response.content.decode()
 
-        self.assertContains(response, "data-formset-add", count=3)
+        self.assertContains(response, "data-formset-template", count=3)
         self.assertContains(response, "data-unsaved-warning")
         self.assertContains(response, "data-discard-changes", count=1)
         self.assertContains(response, "Back to recipes")

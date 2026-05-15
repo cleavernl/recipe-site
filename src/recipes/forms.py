@@ -72,7 +72,7 @@ IngredientFormSet = inlineformset_factory(
     Ingredient,
     form=IngredientForm,
     formset=IngredientFormSetClass,
-    extra=3,
+    extra=1,
     can_delete=True,
 )
 
@@ -91,7 +91,7 @@ InstructionStepFormSet = inlineformset_factory(
     InstructionStep,
     form=InstructionStepForm,
     formset=InstructionStepFormSetClass,
-    extra=4,
+    extra=1,
     can_delete=True,
 )
 

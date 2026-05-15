@@ -175,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const parentForm = formset.closest("form");
     let draggingRow = null;
 
-    if (!rows || !template || !totalInput || !addButton) {
+    if (!rows || !template || !totalInput) {
       return;
     }
 
@@ -222,16 +222,63 @@ document.addEventListener("DOMContentLoaded", () => {
       return ingredientName ? `${ingredientName} removed.` : "Ingredient removed.";
     };
 
-    addButton.addEventListener("click", () => {
+    const visibleRows = () =>
+      Array.from(rows.querySelectorAll("[data-form-row]")).filter((row) => !row.classList.contains("is-removed"));
+
+    const appendEmptyRow = () => {
       const index = Number.parseInt(totalInput.value, 10);
       const wrapper = document.createElement("div");
-      wrapper.innerHTML = template.innerHTML.replaceAll("__prefix__", index);
+      wrapper.innerHTML = template.innerHTML.replaceAll("__prefix__", String(index));
       const row = wrapper.firstElementChild;
+      if (!row) {
+        return null;
+      }
       rows.append(row);
-      totalInput.value = index + 1;
+      totalInput.value = String(index + 1);
       syncOrder();
-      row.querySelector("input, textarea, select")?.focus();
+      return row;
+    };
+
+    const ensureTrailingEmptyRow = () => {
+      const list = visibleRows();
+      if (list.length === 0) {
+        appendEmptyRow();
+        return;
+      }
+      const last = list[list.length - 1];
+      if (rowHasContent(last)) {
+        appendEmptyRow();
+      }
+    };
+
+    const maybeExpandLastRow = (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const row = target.closest("[data-form-row]");
+      if (!row || row.classList.contains("is-removed")) {
+        return;
+      }
+      const list = visibleRows();
+      if (list.length === 0 || list[list.length - 1] !== row) {
+        return;
+      }
+      if (!rowHasContent(row)) {
+        return;
+      }
+      appendEmptyRow();
+    };
+
+    addButton?.addEventListener("click", () => {
+      const row = appendEmptyRow();
+      row?.querySelector("input, textarea, select")?.focus();
     });
+
+    rows.addEventListener("input", maybeExpandLastRow);
+    rows.addEventListener("change", maybeExpandLastRow);
+
+    ensureTrailingEmptyRow();
 
     parentForm?.addEventListener("submit", syncOrder);
 
@@ -255,6 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       row.classList.add("is-removed");
       syncOrder();
+      ensureTrailingEmptyRow();
 
       showToast(removalMessage(row), "success", {
         actionLabel: "Undo",
@@ -269,6 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           row.classList.remove("is-removed");
           syncOrder();
+          ensureTrailingEmptyRow();
         }
       });
     });
