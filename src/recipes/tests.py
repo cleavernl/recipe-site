@@ -79,6 +79,7 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, 'id="top"')
         self.assertContains(response, 'href="#top"')
         self.assertContains(response, reverse("recipes:random"))
+        self.assertContains(response, "Pick Something!")
 
     def test_recipe_list_has_no_search_submit_button_and_live_search_hooks(self):
         self.client.force_login(self.other_user)

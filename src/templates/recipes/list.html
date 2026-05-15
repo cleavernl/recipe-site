@@ -10,8 +10,11 @@
       <p>Save the dishes worth making again, then keep them easy to find for the people you trust.</p>
     </div>
     <div class="hero-actions">
-      <a class="button secondary" href="{% url 'recipes:random' %}">Random recipe</a>
       <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
+      <a class="button secondary hero-pick-something" href="{% url 'recipes:random' %}">
+        <span class="button-icon" aria-hidden="true">🎲</span>
+        <span>Pick Something!</span>
+      </a>
     </div>
   </section>
 
