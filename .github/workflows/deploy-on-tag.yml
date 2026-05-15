@@ -35,8 +35,10 @@ jobs:
           cd "$DEPLOY_DIR"
           git fetch --tags origin
           git checkout "${{ github.ref_name }}"
+          # --force-recreate ensures a new container runs the image just built (Compose can
+          # otherwise leave an older container attached to :8000 despite --build).
           if command -v podman-compose >/dev/null 2>&1; then
-            podman-compose up -d --build
+            podman-compose up -d --build --force-recreate
           else
-            podman compose up -d --build
+            podman compose up -d --build --force-recreate
           fi
