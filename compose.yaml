@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Containerfile
     restart: unless-stopped
+    environment:
+      # Image build already runs collectstatic; omitting the runtime pass reduces cold start time.
+      WEB_SKIP_START_COLLECTSTATIC: "1"
     env_file:
       - .env
     ports:

@@ -1,6 +1,6 @@
 ---
 description: Production deployment on Windows + WSL + Tailscale
-globs: scripts/windows-startup.ps1,scripts/windows-startup-bootstrap.ps1,scripts/wsl-start-stack.sh,compose.yaml,docs/decisions/0004*.md
+globs: scripts/windows-startup.ps1,scripts/windows-startup-bootstrap.ps1,scripts/wsl-start-stack.sh,scripts/start-web.sh,scripts/wsl-wait-for-web.sh,compose.yaml,.github/workflows/deploy-on-tag.yml,docs/decisions/0004*.md
 alwaysApply: false
 ---
 
@@ -11,3 +11,7 @@ Before changing Windows startup scripts, WSL compose bootstrap, or production TL
 Do not store secrets, real Tailscale IPs, or hostnames in docs; use placeholders and point operators at `.env` and `%LOCALAPPDATA%\recipe-site\startup.log` for troubleshooting.
 
 Headless boot: Task Scheduler should run **`windows-startup-bootstrap.ps1`** from **NTFS** (e.g. **`%ProgramData%\recipe-site\`**, a copy from the repo), not **`\\wsl$\…\windows-startup.ps1`** as the task’s first **`-File`**. The bootstrap waits for WSL, then runs **`windows-startup.ps1`** as the **Windows user** that owns WSL/Podman, with **Run whether user is logged on or not**, not as SYSTEM. See README pattern A and decision 0004. If Tailscale stays on “starting” until someone signs in, use a **Tailscale auth key** (`-TailscaleAuthKeyFile` or `RECIPE_SITE_TAILSCALE_AUTHKEY`), not OAuth alone.
+
+## Tag deploy and Tailscale Serve (502)
+
+**`.github/workflows/deploy-on-tag.yml`** only rebuilds/restarts **Podman in WSL**. It does **not** run **`windows-startup.ps1`**, so **`netsh interface portproxy`** on Windows is unchanged. If the WSL primary IPv4 changed (or portproxy was never correct), **Tailscale Serve** to **`http://127.0.0.1:8000`** can get **502** even when the app answers **`curl http://127.0.0.1:8000/`** from inside WSL. Operators should re-run the **scheduled startup task** (or **`windows-startup.ps1`**) after tag deploy when Serve breaks; see README **After `podman compose` restarts in WSL only**. The workflow runs **`scripts/wsl-wait-for-web.sh`** so a failed container boot fails the job instead of leaving a silent 502.

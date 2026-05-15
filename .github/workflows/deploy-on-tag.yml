@@ -42,3 +42,4 @@ jobs:
           else
             podman compose up -d --build --force-recreate
           fi
+          ./scripts/wsl-wait-for-web.sh 8000 90 2

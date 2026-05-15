@@ -14,7 +14,11 @@ WORKERS="${WEB_CONCURRENCY:-2}"
 mkdir -p "${DJANGO_DATA_DIR:-data}" "${DJANGO_MEDIA_ROOT:-media}" staticfiles
 
 uv run python manage.py migrate --noinput
-uv run python manage.py collectstatic --noinput
+# Container images already run collectstatic at build; skipping here speeds first boot
+# (Tailscale Serve on Windows can return 502 if the upstream is slow to accept connections).
+if [[ "${WEB_SKIP_START_COLLECTSTATIC:-0}" != "1" ]]; then
+  uv run python manage.py collectstatic --noinput
+fi
 
 exec uv run gunicorn "$APP_MODULE" \
   --bind "${BIND_HOST}:${BIND_PORT}" \
