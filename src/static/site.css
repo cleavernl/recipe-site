@@ -434,7 +434,7 @@ select:focus-visible {
 }
 
 .search {
-  align-items: end;
+  align-items: center;
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -445,13 +445,14 @@ select:focus-visible {
   font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0;
   text-transform: uppercase;
 }
 
 .search div {
   display: flex;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .search button {
