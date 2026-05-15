@@ -438,26 +438,18 @@ select:focus-visible {
   padding: clamp(1rem, 4vw, 2rem);
 }
 
-.search-panel {
+.search-input-row {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 1.25rem;
-  justify-content: space-between;
+  flex-direction: row;
+  gap: 1rem;
+  min-width: 0;
 }
 
-.search-panel .search {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  flex: 1 1 16rem;
-  margin: 0;
-  max-width: 100%;
-  padding: 0;
-}
-
-.search-pick-link {
-  flex-shrink: 0;
+.search-input-row input[type="search"],
+.search-input-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .narrow-card {
@@ -489,7 +481,9 @@ select:focus-visible {
 }
 
 .search {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .search label {
@@ -501,10 +495,8 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
-.search > div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+.search-pick-link {
+  flex-shrink: 0;
 }
 
 label {
@@ -1529,9 +1521,7 @@ form p {
   .hero,
   .recipe-header,
   .recipe-header-top,
-  .search-panel,
-  .search-panel .search > div,
-  .search-panel .search {
+  .search-input-row {
     align-items: stretch;
     flex-direction: column;
   }
