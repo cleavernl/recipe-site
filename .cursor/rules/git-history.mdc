@@ -1,5 +1,5 @@
 ---
-description: Maintain clean git history with automated feature-boundary commits
+description: Maintain clean git history with commits and post-handoff v* release tags for deploy
 alwaysApply: true
 ---
 
@@ -13,4 +13,11 @@ alwaysApply: true
 - Use concise commit messages that describe the purpose and outcome of the change.
 - Do not create WIP commits unless the user explicitly asks.
 - Do not commit secrets, credentials, local environment files, or generated noise.
-- Do not amend, rebase, reset, or push unless the user explicitly asks.
+- Do not amend, rebase, reset, or force-push unless the user explicitly asks.
+
+## Version tags (production deploy)
+
+- When a **completed, deployable unit** is finished and committed, **push `main` to `origin`**, then **create the next semantic-version tag** matching `.github/workflows/deploy-on-tag.yml` (`v*`, e.g. `v0.1.1`) on that commit and **`git push origin <tag>`**, unless the user says not to tag/push or the work is explicitly **not** for production (e.g. local-only experiment they will squash later).
+- **Bump patch** by default (`v0.1.0` → `v0.1.1`). Ask before bumping **minor** or **major**.
+- Pick the next tag after `git fetch --tags origin` and the highest existing `v*` tag (e.g. `git tag -l 'v*' | sort -V | tail -1`); do not reuse or move tags without explicit user request.
+- If `git push` or tag push fails (auth, network), report the error and stop; do not claim the deploy ran.

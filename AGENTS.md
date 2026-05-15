@@ -16,7 +16,7 @@ This repository is expected to be developed primarily by AI agents. Keep this fi
 - `.cursor/rules/environment-isolation.mdc`: isolated command and package policy.
 - `.cursor/rules/security-and-privacy.mdc`: secure coding and privacy expectations.
 - `.cursor/rules/quality-gates.mdc`: verification expectations before work is complete.
-- `.cursor/rules/git-history.mdc`: feature-boundary commit behavior.
+- `.cursor/rules/git-history.mdc`: feature-boundary commits and `v*` release tags for tag-based deploy.
 - `.cursor/rules/documentation-maintenance.mdc`: keeping `.mdc` context current.
 - `.cursor/rules/decision-records.mdc`: durable technical decision notes.
 
