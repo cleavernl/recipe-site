@@ -77,21 +77,16 @@
         </div>
         <ul class="ingredient-list">
           {% for ingredient in recipe.ingredients.all %}
-            <li{% if ingredient.has_unitless_quantity or not ingredient.quantity %} class="ingredient-list-full{% if ingredient.has_unitless_quantity %} ingredient-list-unitless{% endif %}"{% endif %}>
-              {% if ingredient.quantity and not ingredient.has_unitless_quantity %}
-                <span class="ingredient-quantity">{{ ingredient.quantity }}</span>
-                <span class="ingredient-name">
-                  {{ ingredient.name }}
-                  {% if ingredient.notes %}<small>{{ ingredient.notes }}</small>{% endif %}
-                </span>
-              {% else %}
-                <span class="ingredient-name">
-                  {% if ingredient.quantity %}<strong>{{ ingredient.quantity }}</strong>{% endif %}
-                  {% if ingredient.quantity %} {% endif %}
-                  {{ ingredient.name }}
-                </span>
-                {% if ingredient.notes %}<small class="ingredient-note">{{ ingredient.notes }}</small>{% endif %}
-              {% endif %}
+            <li class="ingredient-line{% if not ingredient.quantity and not ingredient.notes %} ingredient-line--name-only{% endif %}">
+              <span class="ingredient-name">{{ ingredient.name }}</span>
+              <div class="ingredient-meta">
+                {% if ingredient.quantity %}
+                  <span class="ingredient-quantity{% if ingredient.has_unitless_quantity %} ingredient-quantity--unitless{% endif %}">{{ ingredient.quantity }}</span>
+                {% endif %}
+                {% if ingredient.notes %}
+                  <span class="ingredient-note">{{ ingredient.notes }}</span>
+                {% endif %}
+              </div>
             </li>
           {% endfor %}
         </ul>

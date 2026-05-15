@@ -773,14 +773,35 @@ form p {
 }
 
 .ingredient-list li {
-  align-items: baseline;
+  align-items: start;
   border-bottom: 1px solid var(--border);
   display: grid;
   font-size: clamp(1rem, 2vw, 1.08rem);
-  gap: 1rem;
-  grid-template-columns: minmax(5.5rem, 0.45fr) minmax(0, 1fr);
+  gap: 0.45rem 1.1rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(6.5rem, 0.85fr);
   line-height: 1.35;
   padding: 0.55rem 0;
+}
+
+.ingredient-line--name-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ingredient-line--name-only .ingredient-meta {
+  display: none;
+}
+
+.ingredient-meta {
+  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  justify-self: stretch;
+  text-align: right;
+}
+
+.ingredient-name {
+  font-weight: 700;
 }
 
 .ingredient-list li:first-child {
@@ -792,21 +813,9 @@ form p {
   padding-bottom: 0;
 }
 
-.ingredient-list-full {
-  grid-template-columns: minmax(5.5rem, 0.45fr) minmax(0, 1fr);
-}
-
-.ingredient-list-full .ingredient-name {
-  grid-column: 1;
-}
-
-.ingredient-list-full .ingredient-note {
-  grid-column: 2;
-}
-
-.ingredient-list-unitless .ingredient-name {
-  color: var(--accent-dark);
-  font-weight: 800;
+.ingredient-quantity--unitless {
+  font-size: 1.05em;
+  letter-spacing: 0.02em;
 }
 
 .ingredient-quantity {
@@ -816,25 +825,12 @@ form p {
   font-variant-numeric: tabular-nums;
 }
 
-.ingredient-name strong {
-  color: var(--accent-dark);
-  font-weight: 800;
-}
-
-.ingredient-name small,
 .ingredient-note {
   color: var(--muted);
   font-size: 0.9em;
-}
-
-.ingredient-name small {
-  display: block;
-  margin-top: 0.1rem;
-}
-
-.ingredient-note {
-  justify-self: start;
-  text-align: left;
+  line-height: 1.35;
+  max-width: 100%;
+  text-align: right;
 }
 
 .step-list {
