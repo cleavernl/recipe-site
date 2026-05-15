@@ -439,7 +439,7 @@ select:focus-visible {
 }
 
 .search-panel {
-  align-items: flex-end;
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 1rem 1.25rem;
