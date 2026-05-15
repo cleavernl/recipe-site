@@ -7,7 +7,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseNotAllowed, HttpResponseRedirect
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
 from django.utils import timezone
 
@@ -111,6 +111,8 @@ class InviteCodeAdmin(admin.ModelAdmin):
             f"Created 24-hour invite code {invite.code}.",
             messages.SUCCESS,
         )
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": True, "code": invite.code})
         return HttpResponseRedirect(reverse("admin:accounts_invitecode_changelist"))
 
     def generate_unique_code(self) -> str:

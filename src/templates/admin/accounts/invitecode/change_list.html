@@ -1,9 +1,55 @@
 {% extends "admin/change_list.html" %}
 {% load admin_urls %}
 
+{% block extrahead %}
+  {{ block.super }}
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("invite-quick-24h-form");
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = form.querySelector("button[type='submit']");
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = true;
+        }
+        const tokenInput = form.querySelector("[name=csrfmiddlewaretoken]");
+        const csrfToken = tokenInput instanceof HTMLInputElement ? tokenInput.value : "";
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "X-CSRFToken": csrfToken,
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          const contentType = response.headers.get("content-type") || "";
+          if (response.ok && contentType.includes("application/json")) {
+            const data = await response.json();
+            if (data && data.ok && data.code) {
+              try {
+                await navigator.clipboard.writeText(String(data.code));
+              } catch (_) {
+                /* clipboard may be denied outside a secure context */
+              }
+            }
+          }
+        } catch (_) {
+          /* network error: reload still surfaces server state */
+        } finally {
+          window.location.reload();
+        }
+      });
+    });
+  </script>
+{% endblock %}
+
 {% block object-tools-items %}
   <li>
-    <form method="post" action="{% url 'admin:accounts_invitecode_quick_24h' %}">
+    <form id="invite-quick-24h-form" method="post" action="{% url 'admin:accounts_invitecode_quick_24h' %}">
       {% csrf_token %}
       <button class="addlink" type="submit">New 24-hour invite</button>
     </form>

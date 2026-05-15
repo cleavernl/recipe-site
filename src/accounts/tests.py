@@ -83,6 +83,24 @@ class InviteAdminTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertFalse(InviteCode.objects.exists())
 
+    def test_quick_24_hour_invite_ajax_returns_json_with_code(self):
+        staff = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="password-123",
+        )
+        self.client.force_login(staff)
+        url = reverse("admin:accounts_invitecode_quick_24h")
+
+        response = self.client.post(url, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/json", response.headers.get("Content-Type", ""))
+        data = response.json()
+        self.assertTrue(data.get("ok"))
+        self.assertTrue(data.get("code"))
+        self.assertTrue(InviteCode.objects.filter(code=data["code"]).exists())
+
 
 class ProfileTests(TestCase):
     def test_profile_requires_login(self):
