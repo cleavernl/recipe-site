@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
@@ -11,6 +12,22 @@ from django.urls import path, reverse
 from django.utils import timezone
 
 from accounts.models import InviteCode, InviteRedemption, UserSiteActivity, generate_invite_code
+
+_US_CENTRAL = ZoneInfo("America/Chicago")
+
+
+def _format_last_seen_us_central(dt) -> str:
+    if not timezone.is_aware(dt):
+        dt = timezone.make_aware(dt, datetime.timezone.utc)
+    local = dt.astimezone(_US_CENTRAL)
+    hour12 = local.hour % 12 or 12
+    suffix = "a.m." if local.hour < 12 else "p.m."
+    tz = local.strftime("%Z")
+    return (
+        f"{local.strftime('%b')} {local.day}, {local.year}, "
+        f"{hour12}:{local.minute:02d} {suffix} {tz}"
+    )
+
 
 admin.site.unregister(User)
 
@@ -24,7 +41,10 @@ class UserAdmin(BaseUserAdmin):
         ("Site usage", {"fields": ("last_site_visit",)}),
     )
 
-    @admin.display(description="Last site visit", ordering="site_activity__last_seen_at")
+    @admin.display(
+        description="Last site visit (US Central)",
+        ordering="site_activity__last_seen_at",
+    )
     def last_site_visit(self, obj):
         if not obj.pk:
             return "—"
@@ -33,7 +53,7 @@ class UserAdmin(BaseUserAdmin):
         except UserSiteActivity.DoesNotExist:
             return "—"
         if activity.last_seen_at:
-            return activity.last_seen_at
+            return _format_last_seen_us_central(activity.last_seen_at)
         return "—"
 
     def get_queryset(self, request):

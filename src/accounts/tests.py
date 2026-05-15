@@ -165,4 +165,4 @@ class SiteActivityMiddlewareTests(TestCase):
         response = self.client.get(reverse("admin:auth_user_changelist"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Last site visit")
+        self.assertContains(response, "Last site visit (US Central)")
