@@ -81,7 +81,7 @@
               <span class="ingredient-name">{{ ingredient.name }}</span>
               <div class="ingredient-meta">
                 {% if ingredient.quantity %}
-                  <span class="ingredient-quantity{% if ingredient.has_unitless_quantity %} ingredient-quantity--unitless{% endif %}">{{ ingredient.quantity }}</span>
+                  <span class="ingredient-quantity">{{ ingredient.quantity }}</span>
                 {% endif %}
                 {% if ingredient.notes %}
                   <span class="ingredient-note">{{ ingredient.notes }}</span>

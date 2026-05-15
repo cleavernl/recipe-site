@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -73,10 +71,6 @@ class Ingredient(models.Model):
     def __str__(self) -> str:
         parts = [self.quantity, self.name, self.notes]
         return " ".join(part for part in parts if part)
-
-    @property
-    def has_unitless_quantity(self) -> bool:
-        return bool(self.quantity and not re.search(r"[A-Za-z]", self.quantity))
 
 
 class RecipePhoto(models.Model):

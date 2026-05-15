@@ -813,11 +813,6 @@ form p {
   padding-bottom: 0;
 }
 
-.ingredient-quantity--unitless {
-  font-size: 1.05em;
-  letter-spacing: 0.02em;
-}
-
 .ingredient-quantity {
   color: var(--accent-dark);
   font-size: 0.95em;
