@@ -93,7 +93,9 @@ STATICFILES_DIRS = [BASE_DIR / "src" / "static"]
 STATICFILES_STORAGE_BACKEND = (
     "django.contrib.staticfiles.storage.StaticFilesStorage"
     if DEBUG
-    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    # Manifest storage 500s if collectstatic output is missing/out of sync (e.g. empty
+    # staticfiles dir). CompressedStaticFilesStorage still serves compressed assets via WhiteNoise.
+    else "whitenoise.storage.CompressedStaticFilesStorage"
 )
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
