@@ -14,7 +14,7 @@ This record captures environment facts that are not obvious from code alone and 
 |--------|------|
 | Windows host | Tailscale client, Task Scheduler, `netsh` portproxy, Windows Firewall |
 | WSL2 | Podman rootless, compose project; **`compose.yaml` uses `network_mode: host`** so Gunicorn listens on the real WSL interfaces (not only a rootless port-forward on `127.0.0.1`) |
-| Container | Gunicorn per `scripts/start-web.sh`; SQLite + media on named volumes per `compose.yaml` |
+| Container | Gunicorn per `scripts/start-web.sh`; SQLite + **one worker** in **`compose.yaml`** (`WEB_CONCURRENCY=1`) to avoid **`database is locked`** 500s; SQLite + media on named volumes per `compose.yaml` |
 
 **Typical WSL project path (production):** `~/recipe-home/recipe-site` (see `scripts/windows-startup.ps1` default `-WslProjectDir`). Prefer a **single** clone under WSL for compose, `windows-startup.ps1`, and tag-based deploy (**`RECIPE_SITE_DEPLOY_PATH`**); use **`windows-startup-bootstrap.ps1`** on NTFS for Task Scheduler’s first **`-File`** hop (README). Development on other machines may use a different path (e.g. isolated `recipe-site-home`); do not assume one path for all environments.
 

@@ -11,6 +11,8 @@ services:
     environment:
       # Image build already runs collectstatic; omitting the runtime pass reduces cold start time.
       WEB_SKIP_START_COLLECTSTATIC: "1"
+      # SQLite cannot handle concurrent writers; multiple Gunicorn workers cause intermittent 500s.
+      WEB_CONCURRENCY: "1"
     env_file:
       - .env
     volumes:
