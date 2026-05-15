@@ -409,10 +409,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const liveSearchDynamic = document.querySelector("[data-recipe-list-dynamic]");
   if (liveSearchForm instanceof HTMLFormElement && liveSearchDynamic) {
     const input = liveSearchForm.querySelector("input[name='q']");
+    const randomPick = document.querySelector("[data-recipe-random-pick]");
     if (input instanceof HTMLInputElement) {
       let debounceId = 0;
       let abortController = null;
       let requestSeq = 0;
+
+      const syncRandomPickHref = () => {
+        if (!(randomPick instanceof HTMLAnchorElement)) {
+          return;
+        }
+        const base = randomPick.dataset.randomBase || "";
+        if (!base) {
+          return;
+        }
+        const q = input.value.trim();
+        const params = new URLSearchParams();
+        if (q) {
+          params.set("q", q);
+        }
+        randomPick.href = params.toString() ? `${base}?${params.toString()}` : base;
+      };
 
       const runLiveSearch = async () => {
         const q = input.value.trim();
@@ -450,6 +467,7 @@ document.addEventListener("DOMContentLoaded", () => {
           nextUrl.searchParams.delete("partial");
           const search = nextUrl.searchParams.toString();
           window.history.replaceState({}, "", `${nextUrl.pathname}${search ? `?${search}` : ""}`);
+          syncRandomPickHref();
         } catch (error) {
           if (seq !== requestSeq) {
             return;
@@ -466,9 +484,12 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       input.addEventListener("input", () => {
+        syncRandomPickHref();
         window.clearTimeout(debounceId);
         debounceId = window.setTimeout(runLiveSearch, 280);
       });
+
+      syncRandomPickHref();
     }
   }
 

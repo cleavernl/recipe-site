@@ -347,20 +347,6 @@ select:focus-visible {
   position: absolute;
 }
 
-.hero-actions {
-  align-items: stretch;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  gap: 0.65rem;
-}
-
-@media (min-width: 761px) {
-  .hero-actions {
-    align-items: flex-end;
-  }
-}
-
 .hero-nav-link {
   align-items: center;
   border-radius: 999px;
@@ -439,7 +425,7 @@ select:focus-visible {
   max-width: 42rem;
 }
 
-.search,
+.search-panel,
 .narrow-card,
 .wide-card,
 .discussion,
@@ -450,6 +436,28 @@ select:focus-visible {
   box-shadow: var(--shadow-soft);
   margin: 1.5rem 0;
   padding: clamp(1rem, 4vw, 2rem);
+}
+
+.search-panel {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.25rem;
+  justify-content: space-between;
+}
+
+.search-panel .search {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  flex: 1 1 16rem;
+  margin: 0;
+  max-width: 100%;
+  padding: 0;
+}
+
+.search-pick-link {
+  flex-shrink: 0;
 }
 
 .narrow-card {
@@ -1521,8 +1529,9 @@ form p {
   .hero,
   .recipe-header,
   .recipe-header-top,
-  .search > div,
-  .search {
+  .search-panel,
+  .search-panel .search > div,
+  .search-panel .search {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1532,10 +1541,6 @@ form p {
     position: relative;
     top: auto;
     z-index: 15;
-  }
-
-  .search {
-    display: flex;
   }
 
   .rating-panel {

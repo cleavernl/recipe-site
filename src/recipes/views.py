@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import random
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -11,7 +13,7 @@ from django.db.models import Avg, Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
@@ -74,15 +76,48 @@ def user_can_edit_recipe(user, recipe: Recipe) -> bool:
     return user.is_staff or recipe.owner_id == user.id
 
 
+def filtered_active_recipe_queryset(search_text: str):
+    """Active recipes optionally filtered by the same search rules as the recipe list."""
+    queryset = (
+        active_recipes()
+        .select_related("owner")
+        .prefetch_related("ingredients", "photos")
+        .annotate(average_rating=Avg("ratings__value"))
+        .annotate(rating_count=Count("ratings"))
+        .order_by("title", "id")
+    )
+    query = search_text.strip()
+    if query:
+        queryset = queryset.filter(
+            Q(title__icontains=query)
+            | Q(description__icontains=query)
+            | Q(ingredients__name__icontains=query)
+        ).distinct()
+    return queryset
+
+
 class RandomRecipeView(PrivateRecipeMixin, View):
-    """Redirect to a random active (non-deleted) recipe."""
+    """Redirect to a random recipe among those matching the optional list search (q)."""
 
     def get(self, request, *args, **kwargs):
-        recipe = active_recipes().order_by("?").only("slug").first()
-        if recipe is None:
-            messages.info(request, "There are no recipes to choose from yet.")
-            return redirect("recipes:list")
-        return redirect("recipes:detail", slug=recipe.slug)
+        purge_expired_deleted_recipes()
+        q = request.GET.get("q", "").strip()
+        recipe_qs = filtered_active_recipe_queryset(q)
+        pk_list = list(recipe_qs.values_list("pk", flat=True))
+        if not pk_list:
+            if q:
+                messages.info(request, "No recipes match your current search.")
+            else:
+                messages.info(request, "There are no recipes to choose from yet.")
+            list_url = reverse("recipes:list")
+            if q:
+                return redirect(f"{list_url}?{urlencode({'q': q})}")
+            return redirect(list_url)
+        chosen_pk = random.choice(pk_list)
+        slug = recipe_qs.filter(pk=chosen_pk).values_list("slug", flat=True).first()
+        if not slug:
+            return redirect(reverse("recipes:list"))
+        return redirect("recipes:detail", slug=slug)
 
 
 class RecipeListView(PrivateRecipeMixin, ListView):
@@ -93,22 +128,7 @@ class RecipeListView(PrivateRecipeMixin, ListView):
 
     def get_queryset(self):
         purge_expired_deleted_recipes()
-        queryset = (
-            active_recipes()
-            .select_related("owner")
-            .prefetch_related("ingredients", "photos")
-            .annotate(average_rating=Avg("ratings__value"))
-            .annotate(rating_count=Count("ratings"))
-            .order_by("title", "id")
-        )
-        query = self.request.GET.get("q", "").strip()
-        if query:
-            queryset = queryset.filter(
-                Q(title__icontains=query)
-                | Q(description__icontains=query)
-                | Q(ingredients__name__icontains=query)
-            ).distinct()
-        return queryset
+        return filtered_active_recipe_queryset(self.request.GET.get("q", ""))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

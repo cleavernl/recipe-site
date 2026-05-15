@@ -60,6 +60,28 @@ class RecipeWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], self.recipe.get_absolute_url())
 
+    def test_random_recipe_respects_search_query(self):
+        other = Recipe.objects.create(
+            owner=self.owner,
+            title="Zesty Limeade",
+            description="Cool and tart.",
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(f"{reverse('recipes:random')}?q=Limeade", follow=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], other.get_absolute_url())
+
+    def test_random_recipe_no_match_for_search_redirects_to_list(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(f"{reverse('recipes:random')}?q=nonexistent", follow=True)
+
+        self.assertRedirects(response, f"{reverse('recipes:list')}?q=nonexistent")
+        message_text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("match", message_text.lower())
+
     def test_random_recipe_when_no_active_recipes_redirects_to_list(self):
         self.recipe.deleted_at = timezone.now()
         self.recipe.save(update_fields=["deleted_at"])
@@ -78,6 +100,8 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertContains(response, 'id="top"')
         self.assertContains(response, 'href="#top"')
+        self.assertContains(response, "data-recipe-search-panel")
+        self.assertContains(response, "data-recipe-random-pick")
         self.assertContains(response, reverse("recipes:random"))
         self.assertContains(response, "Pick Something!")
 
