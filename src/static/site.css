@@ -347,9 +347,18 @@ select:focus-visible {
   position: absolute;
 }
 
-.hero > * {
-  position: relative;
-  z-index: 1;
+.hero-actions {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.65rem;
+}
+
+@media (min-width: 761px) {
+  .hero-actions {
+    align-items: flex-end;
+  }
 }
 
 .hero h1,

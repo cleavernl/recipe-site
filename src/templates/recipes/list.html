@@ -9,7 +9,10 @@
       <h1>Recipes</h1>
       <p>Save the dishes worth making again, then keep them easy to find for the people you trust.</p>
     </div>
-    <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
+    <div class="hero-actions">
+      <a class="button secondary" href="{% url 'recipes:random' %}">Random recipe</a>
+      <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
+    </div>
   </section>
 
   <form class="search" method="get" autocomplete="off" data-recipe-list-search>

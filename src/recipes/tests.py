@@ -46,6 +46,31 @@ class RecipeWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response["Location"])
 
+    def test_random_recipe_requires_login(self):
+        response = self.client.get(reverse("recipes:random"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response["Location"])
+
+    def test_random_recipe_redirects_to_an_active_recipe(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:random"), follow=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], self.recipe.get_absolute_url())
+
+    def test_random_recipe_when_no_active_recipes_redirects_to_list(self):
+        self.recipe.deleted_at = timezone.now()
+        self.recipe.save(update_fields=["deleted_at"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:random"), follow=True)
+
+        self.assertRedirects(response, reverse("recipes:list"))
+        message_text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("no recipes", message_text.lower())
+
     def test_recipe_list_has_back_to_top_link(self):
         self.client.force_login(self.other_user)
 
@@ -53,6 +78,7 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertContains(response, 'id="top"')
         self.assertContains(response, 'href="#top"')
+        self.assertContains(response, reverse("recipes:random"))
 
     def test_recipe_list_has_no_search_submit_button_and_live_search_hooks(self):
         self.client.force_login(self.other_user)

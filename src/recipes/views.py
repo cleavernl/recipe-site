@@ -74,6 +74,17 @@ def user_can_edit_recipe(user, recipe: Recipe) -> bool:
     return user.is_staff or recipe.owner_id == user.id
 
 
+class RandomRecipeView(PrivateRecipeMixin, View):
+    """Redirect to a random active (non-deleted) recipe."""
+
+    def get(self, request, *args, **kwargs):
+        recipe = active_recipes().order_by("?").only("slug").first()
+        if recipe is None:
+            messages.info(request, "There are no recipes to choose from yet.")
+            return redirect("recipes:list")
+        return redirect("recipes:detail", slug=recipe.slug)
+
+
 class RecipeListView(PrivateRecipeMixin, ListView):
     model = Recipe
     paginate_by = 24

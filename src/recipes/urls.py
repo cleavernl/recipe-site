@@ -8,6 +8,7 @@ app_name = "recipes"
 
 urlpatterns = [
     path("", views.RecipeListView.as_view(), name="list"),
+    path("random/", views.RandomRecipeView.as_view(), name="random"),
     path("new/", views.RecipeCreateView.as_view(), name="create"),
     path(
         "recently-deleted/",
