@@ -1462,6 +1462,18 @@ form p {
   }
 }
 
+/* Below laptop-ish widths (includes phones in landscape): stack gather/cook and drop
+   sticky ingredients — a tall list + short viewport made the sidebar stick awkwardly. */
+@media (max-width: 1024px) {
+  .recipe-cook-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ingredient-card {
+    position: static;
+  }
+}
+
 @media (max-width: 760px) {
   .site-header,
   .hero,
@@ -1482,14 +1494,6 @@ form p {
 
   .search {
     display: flex;
-  }
-
-  .recipe-cook-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .ingredient-card {
-    position: static;
   }
 
   .rating-panel {
