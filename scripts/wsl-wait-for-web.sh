@@ -10,7 +10,7 @@ BASE_URL="http://127.0.0.1:${PORT}"
 
 http_ok() {
   local code
-  code="$(curl -gSs --connect-timeout 2 --max-time 8 -o /dev/null -w '%{http_code}' "${BASE_URL}/accounts/login/" 2>/dev/null || echo 000)"
+  code="$(curl -gSs --connect-timeout 2 --max-time 8 -o /dev/null -w '%{http_code}' "${BASE_URL}/login/" 2>/dev/null || echo 000)"
   [[ "$code" =~ ^(200|30[123])$ ]]
 }
 
@@ -23,5 +23,5 @@ for i in $(seq 1 "$MAX_ATTEMPTS"); do
   sleep "$SLEEP_SEC"
 done
 
-echo "Timed out after $((MAX_ATTEMPTS * SLEEP_SEC))s waiting for ${BASE_URL}/accounts/login/"
+echo "Timed out after $((MAX_ATTEMPTS * SLEEP_SEC))s waiting for ${BASE_URL}/login/"
 exit 1
