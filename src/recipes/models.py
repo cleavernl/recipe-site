@@ -7,6 +7,75 @@ from django.urls import reverse
 from django.utils.text import slugify
 
 
+class Tag(models.Model):
+    """Short labels shared across recipes (e.g. weeknight, vegetarian)."""
+
+    name = models.CharField(max_length=64)
+    slug = models.SlugField(max_length=80, unique=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @classmethod
+    def get_or_create_for_name(cls, name: str) -> Tag:
+        cleaned = " ".join(str(name).split()).strip()
+        if not cleaned:
+            msg = "Tag name cannot be empty."
+            raise ValueError(msg)
+        cleaned = cleaned[:64]
+        existing = cls.objects.filter(name__iexact=cleaned).first()
+        if existing:
+            return existing
+        slug = (slugify(cleaned.lower()) or "tag")[:72]
+        tag, _ = cls.objects.get_or_create(slug=slug, defaults={"name": cleaned})
+        return tag
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = self._make_unique_slug()
+        super().save(*args, **kwargs)
+
+    def _make_unique_slug(self) -> str:
+        base = (slugify(self.name.lower()) or "tag")[:72]
+        slug = base
+        counter = 2
+        while Tag.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+            slug = f"{base}-{counter}"
+            counter += 1
+        return slug
+
+
+def parse_recipe_tag_names(raw: str, *, max_tags: int = 40) -> list[str]:
+    """Split user tag input on commas and newlines; strip and cap count."""
+    if not raw or not str(raw).strip():
+        return []
+    names: list[str] = []
+    for chunk in str(raw).replace("\n", ",").split(","):
+        name = " ".join(chunk.split()).strip()
+        if not name:
+            continue
+        if len(name) > 64:
+            name = name[:64].rstrip()
+        names.append(name)
+        if len(names) >= max_tags:
+            break
+    return names
+
+
+def tags_from_parsed_names(names: list[str]) -> list[Tag]:
+    """Resolve display names to Tag rows (create when missing)."""
+    return [Tag.get_or_create_for_name(name) for name in names]
+
+
+def sync_recipe_tags(recipe: Recipe, raw: str) -> None:
+    """Replace recipe tags from a comma/newline separated string."""
+    names = parse_recipe_tag_names(raw)
+    recipe.tags.set(tags_from_parsed_names(names))
+
+
 class Recipe(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -26,6 +95,7 @@ class Recipe(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="recipes")
 
     class Meta:
         ordering = ["title"]

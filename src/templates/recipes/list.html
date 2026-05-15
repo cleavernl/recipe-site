@@ -3,18 +3,109 @@
 {% block title %}Recipes - Family Recipes{% endblock %}
 
 {% block content %}
-  <section class="hero" id="top">
+  <section class="hero hero--home" id="top">
     <div>
-      <p class="eyebrow">Friends and family cookbook</p>
-      <h1>Recipes</h1>
+      <h1 class="hero-cookbook-title">Friends and family cookbook</h1>
       <p>Save the dishes worth making again, then keep them easy to find for the people you trust.</p>
     </div>
     <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
   </section>
 
   <section class="search-panel" data-recipe-search-panel>
-    <form class="search" method="get" autocomplete="off" data-recipe-list-search>
-      <label for="q">Search recipes</label>
+    <form
+      class="search"
+      method="get"
+      autocomplete="off"
+      data-recipe-list-search
+      data-recipe-ease-tooltip="Ingredients + steps (fewer is easier)."
+    >
+      <div class="search-panel-header-row">
+        <label class="search-panel-title" for="q">Search recipes</label>
+        <div data-recipe-tag-filters-mount>
+          {% include "recipes/_search_tag_filters.html" %}
+        </div>
+        <div class="search-sort-group">
+          <span id="recipe-sort-heading" class="search-sort-label">Sort by</span>
+          <div class="search-sort-controls">
+            <div class="search-sort-combobox" data-recipe-sort-combobox>
+              <input type="hidden" name="sort" value="{{ sort }}" data-recipe-sort-input>
+              <button
+                type="button"
+                id="recipe-sort-trigger"
+                class="search-sort-trigger"
+                data-recipe-sort-trigger
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="recipe-sort-listbox"
+                aria-labelledby="recipe-sort-heading recipe-sort-trigger-label"
+                {% if sort == "ease" %}title="Ingredients + steps (fewer is easier)."{% endif %}
+              >
+                <span id="recipe-sort-trigger-label" class="search-sort-trigger-text" data-recipe-sort-trigger-label>{{ sort_display_label }}</span>
+                <svg class="search-sort-trigger-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </button>
+              <ul
+                id="recipe-sort-listbox"
+                class="search-sort-listbox"
+                role="listbox"
+                hidden
+                data-recipe-sort-listbox
+                aria-labelledby="recipe-sort-heading"
+              >
+                {% for value, label in recipe_list_sort_options %}
+                  <li
+                    class="search-sort-option"
+                    role="option"
+                    tabindex="-1"
+                    data-value="{{ value }}"
+                    aria-selected="{% if sort == value %}true{% else %}false{% endif %}"
+                  >
+                    <span class="search-sort-option-row">
+                      <span class="search-sort-option-label">{{ label }}</span>
+                      {% if value == "ease" %}
+                        <span class="search-sort-option-help" title="Ingredients + steps (fewer is easier).">
+                          <svg class="search-sort-help-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75"></circle>
+                            <path
+                              d="M9.6 9.3c0-1.3 1.1-2.4 2.4-2.4 1.3 0 2.4 1 2.4 2.3 0 1.1-.5 1.7-1.2 2.2-.6.4-1.2.9-1.2 1.9v.4"
+                              stroke="currentColor"
+                              stroke-width="1.75"
+                              stroke-linecap="round"
+                            ></path>
+                            <circle cx="12" cy="17.35" r="1.05" fill="currentColor" stroke="none"></circle>
+                          </svg>
+                        </span>
+                      {% endif %}
+                    </span>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+            <input type="hidden" name="sort_dir" value="{{ sort_dir }}" data-recipe-sort-dir>
+            <button
+              type="button"
+              class="search-sort-dir-button"
+              data-recipe-sort-dir-toggle
+              data-sort-dir="{{ sort_dir }}"
+              aria-label="{% if sort_dir == 'asc' %}Ascending order. Click to reverse.{% else %}Descending order. Click to reverse.{% endif %}"
+            >
+              <span class="search-sort-dir-icons" aria-hidden="true">
+                <svg class="search-sort-dir-svg search-sort-dir-svg-asc" viewBox="0 0 24 24" fill="none" focusable="false">
+                  <path d="M8 6L12 2L16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M12 3V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  <path d="M6 22H18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                </svg>
+                <svg class="search-sort-dir-svg search-sort-dir-svg-desc" viewBox="0 0 24 24" fill="none" focusable="false">
+                  <path d="M8 18L12 22L16 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M12 21V8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  <path d="M6 2H18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="search-input-row">
         <input id="q" type="search" name="q" value="{{ query }}" placeholder="Search title, notes, or ingredients" autocomplete="off" autocapitalize="off" spellcheck="false">
         <a

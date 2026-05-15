@@ -16,6 +16,7 @@ urlpatterns = [
         name="recently_deleted",
     ),
     path("<slug:slug>/", views.RecipeDetailView.as_view(), name="detail"),
+    path("<slug:slug>/tags/add/", views.AddRecipeTagView.as_view(), name="add_tag"),
     path("<slug:slug>/edit/", views.RecipeUpdateView.as_view(), name="update"),
     path("<slug:slug>/delete/", views.RecipeDeleteView.as_view(), name="delete"),
     path("<slug:slug>/restore/", views.RestoreRecipeView.as_view(), name="restore"),

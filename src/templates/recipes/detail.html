@@ -24,6 +24,22 @@
         <div class="actions">
           <button class="button secondary" type="button" data-print-recipe>Print</button>
           {% if not recipe.deleted_at and can_edit %}
+            {% if quick_tag_form %}
+            <details class="recipe-quick-tag">
+              <summary class="button secondary recipe-quick-tag-summary">Add tag</summary>
+              <div class="recipe-quick-tag-panel">
+                <form method="post" action="{% url 'recipes:add_tag' recipe.slug %}" data-recipe-quick-tag-form>
+                  {% csrf_token %}
+                  <div class="recipe-quick-tag-fields">
+                    {{ quick_tag_form.similar_tag_ack }}
+                    <label class="sr-only" for="{{ quick_tag_form.tag.id_for_label }}">New tag</label>
+                    {{ quick_tag_form.tag }}
+                    <button type="submit" class="button">Add</button>
+                  </div>
+                </form>
+              </div>
+            </details>
+            {% endif %}
             <a class="button secondary" href="{% url 'recipes:update' recipe.slug %}">Edit</a>
           {% endif %}
           {% if not recipe.deleted_at %}
@@ -34,6 +50,27 @@
       <div>
         <h1>{{ recipe.title }}</h1>
         {% if recipe.description %}<p class="lede">{{ recipe.description }}</p>{% endif %}
+        {% if recipe.tags.all %}
+          <div class="tag-overflow recipe-detail-tags-overflow" data-tag-overflow>
+            <div class="tag-overflow-main" data-tag-overflow-main>
+              <ul class="recipe-tag-list tag-overflow-row" data-tag-overflow-row aria-label="Tags">
+                {% for tag in recipe.tags.all %}
+                  <li>
+                    <a class="recipe-tag-link" href="{% url 'recipes:list' %}?tag={{ tag.slug|urlencode }}">{{ tag.name }}</a>
+                  </li>
+                {% endfor %}
+              </ul>
+              <details class="tag-overflow-details" data-tag-overflow-details hidden>
+                <summary class="tag-overflow-summary" aria-label="More tags for this recipe">
+                  +<span data-tag-overflow-count>0</span>
+                </summary>
+                <div class="tag-overflow-panel-shell">
+                  <ul class="recipe-tag-list tag-overflow-panel-list" data-tag-overflow-panel></ul>
+                </div>
+              </details>
+            </div>
+          </div>
+        {% endif %}
       </div>
     </header>
 
@@ -105,6 +142,31 @@
       </section>
     </div>
   </article>
+
+  {% if quick_tag_form %}
+    <datalist id="recipe-tag-suggestions">
+      {% for tag in tag_suggestions %}
+        <option value="{{ tag.name }}"></option>
+      {% endfor %}
+    </datalist>
+    <div id="recipe-quick-tag-similar-modal" class="similar-tag-overlay" hidden data-similar-tag-overlay role="presentation">
+      <div class="similar-tag-overlay-backdrop" aria-hidden="true"></div>
+      <div
+        class="similar-tag-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="recipe-quick-tag-similar-modal-title"
+        tabindex="-1"
+      >
+        <h2 id="recipe-quick-tag-similar-modal-title">Similar existing tag</h2>
+        <p class="similar-tag-modal-lede" data-quick-tag-similar-body></p>
+        <div class="similar-tag-modal-actions">
+          <button type="button" class="button" data-quick-tag-similar-yes>Use suggested tag</button>
+          <button type="button" class="button secondary" data-quick-tag-similar-no>Keep what I typed</button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   <section class="discussion" id="discussion">
     <h2>Ratings and comments</h2>

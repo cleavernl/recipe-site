@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,8 +12,32 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto
-from recipes.views import purge_expired_deleted_recipes
+from recipes.forms import RecipeTagLineFormSet
+from recipes.models import (
+    Comment,
+    Ingredient,
+    InstructionStep,
+    Rating,
+    Recipe,
+    RecipePhoto,
+    Tag,
+    sync_recipe_tags,
+)
+from recipes.views import RecipeListView, purge_expired_deleted_recipes
+
+
+def tag_formset_post_data(names: list[str]) -> dict[str, str]:
+    """POST keys for the tags line formset (prefix ``tags``)."""
+    n = len(names)
+    data: dict[str, str] = {
+        "tags-TOTAL_FORMS": str(n),
+        "tags-INITIAL_FORMS": "0",
+        "tags-MIN_NUM_FORMS": "0",
+        "tags-MAX_NUM_FORMS": "40",
+    }
+    for i, name in enumerate(names):
+        data[f"tags-{i}-tag_name"] = name
+    return data
 
 
 class RecipeWorkflowTests(TestCase):
@@ -123,6 +148,325 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, "recipe-grid")
         self.assertNotContains(response, "Friends and family cookbook")
 
+    def test_recipe_list_sorts_by_rating_high_first(self):
+        self.client.force_login(self.other_user)
+        low = Recipe.objects.create(owner=self.owner, title="Low Rated Soup")
+        high = Recipe.objects.create(owner=self.owner, title="High Rated Pie")
+        Rating.objects.create(recipe=low, user=self.owner, value=2)
+        Rating.objects.create(recipe=high, user=self.owner, value=5)
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "rating"})
+        body = response.content.decode()
+
+        self.assertLess(body.index("High Rated Pie"), body.index("Low Rated Soup"))
+
+    def test_recipe_list_sorts_by_rating_asc_low_first(self):
+        self.client.force_login(self.other_user)
+        low = Recipe.objects.create(owner=self.owner, title="Low Rated Soup")
+        high = Recipe.objects.create(owner=self.owner, title="High Rated Pie")
+        Rating.objects.create(recipe=low, user=self.owner, value=2)
+        Rating.objects.create(recipe=high, user=self.owner, value=5)
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "rating", "sort_dir": "asc"})
+        body = response.content.decode()
+
+        self.assertLess(body.index("Low Rated Soup"), body.index("High Rated Pie"))
+
+    def test_recipe_list_invalid_sort_dir_uses_default(self):
+        self.client.force_login(self.other_user)
+        low = Recipe.objects.create(owner=self.owner, title="Low Rated Soup")
+        high = Recipe.objects.create(owner=self.owner, title="High Rated Pie")
+        Rating.objects.create(recipe=low, user=self.owner, value=2)
+        Rating.objects.create(recipe=high, user=self.owner, value=5)
+
+        response = self.client.get(
+            reverse("recipes:list"),
+            {"sort": "rating", "sort_dir": "not-a-direction"},
+        )
+        body = response.content.decode()
+
+        self.assertLess(body.index("High Rated Pie"), body.index("Low Rated Soup"))
+
+    def test_recipe_list_sorts_by_ease_fewer_work_first(self):
+        self.client.force_login(self.other_user)
+        simple = Recipe.objects.create(owner=self.owner, title="AAA Simple Snack")
+        Ingredient.objects.create(recipe=simple, name="salt", order=1)
+        InstructionStep.objects.create(recipe=simple, text="Eat.", order=1)
+        heavy = Recipe.objects.create(owner=self.owner, title="ZZZ Heavy Feast")
+        for i in range(5):
+            Ingredient.objects.create(recipe=heavy, name=f"ingredient{i}", order=i)
+        for i in range(5):
+            InstructionStep.objects.create(recipe=heavy, text=f"step {i}", order=i)
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "ease"})
+        body = response.content.decode()
+
+        self.assertLess(body.index("AAA Simple Snack"), body.index("ZZZ Heavy Feast"))
+
+    def test_recipe_list_invalid_sort_is_ignored(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "not-a-real-sort"})
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_pagination_preserves_sort_query(self):
+        self.client.force_login(self.other_user)
+        for index in range(24):
+            Recipe.objects.create(owner=self.owner, title=f"Bulk Recipe {index:02d}")
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "rating"})
+
+        self.assertContains(response, "sort=rating")
+
+    def test_pagination_preserves_sort_dir_when_non_default(self):
+        self.client.force_login(self.other_user)
+        for index in range(24):
+            Recipe.objects.create(owner=self.owner, title=f"Bulk Recipe {index:02d}")
+
+        response = self.client.get(
+            reverse("recipes:list"),
+            {"sort": "rating", "sort_dir": "asc"},
+        )
+
+        self.assertContains(response, "sort=rating")
+        self.assertContains(response, "sort_dir=asc")
+
+    def test_sync_recipe_tags_sets_many_to_many(self):
+        recipe = Recipe.objects.create(owner=self.owner, title="Tagged Dish")
+        sync_recipe_tags(recipe, "Breakfast, Quick, Comfort Food")
+        self.assertEqual(recipe.tags.count(), 3)
+        self.assertCountEqual(
+            list(recipe.tags.values_list("slug", flat=True)),
+            ["breakfast", "quick", "comfort-food"],
+        )
+
+    def test_sync_recipe_tags_case_insensitive_reuses_single_tag(self):
+        Tag.objects.create(name="Vegan", slug="vegan")
+        recipe = Recipe.objects.create(owner=self.owner, title="Tagged Dish")
+        sync_recipe_tags(recipe, "vegan, VEGAN, Vegan")
+        self.assertEqual(recipe.tags.count(), 1)
+        self.assertEqual(recipe.tags.get().name, "Vegan")
+
+    def test_recipe_tag_formset_similar_tag_adds_recommendation_note(self):
+        Tag.objects.create(name="Dessert", slug="dessert")
+        fs = RecipeTagLineFormSet(
+            {
+                "tags-TOTAL_FORMS": "1",
+                "tags-INITIAL_FORMS": "0",
+                "tags-MIN_NUM_FORMS": "0",
+                "tags-MAX_NUM_FORMS": "40",
+                "tags-0-tag_name": "desser",
+            },
+            prefix="tags",
+        )
+        self.assertTrue(fs.is_valid())
+        self.assertTrue(any("Dessert" in note for note in fs.similar_tag_notes))
+
+    def test_recipe_tag_formset_similar_broring_when_typo_boring(self):
+        Tag.objects.create(name="Broring", slug="broring")
+        fs = RecipeTagLineFormSet(
+            {
+                "tags-TOTAL_FORMS": "1",
+                "tags-INITIAL_FORMS": "0",
+                "tags-MIN_NUM_FORMS": "0",
+                "tags-MAX_NUM_FORMS": "40",
+                "tags-0-tag_name": "boring",
+            },
+            prefix="tags",
+        )
+        self.assertTrue(fs.is_valid())
+        self.assertTrue(any("Broring" in note for note in fs.similar_tag_notes))
+
+    def test_owner_can_quick_add_tag_from_detail(self):
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": "  Brunch  "}, follow=True)
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        self.recipe.refresh_from_db()
+        self.assertTrue(self.recipe.tags.filter(name__iexact="Brunch").exists())
+
+    def test_quick_add_similar_tag_no_ack_shows_warning(self):
+        Tag.objects.create(name="Broring", slug="broring")
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": "boring"}, follow=True)
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        message_text = " ".join(str(m) for m in response.context["messages"]).lower()
+        self.assertIn("broring", message_text)
+        self.assertIn("existing tag", message_text)
+
+    def test_quick_add_similar_tag_preflight_json(self):
+        Tag.objects.create(name="Broring", slug="broring")
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": "boring"}, HTTP_X_RECIPE_SIMILAR_TAG_CHECK="1")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["need_confirm"])
+        self.assertEqual(len(data["pairs"]), 1)
+        self.assertEqual(data["pairs"][0]["typed"], "boring")
+        self.assertEqual(data["pairs"][0]["suggested"], "Broring")
+
+    def test_quick_add_similar_tag_accepted_uses_suggested(self):
+        Tag.objects.create(name="Broring", slug="broring")
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(
+            url,
+            {"tag": "boring", "similar_tag_ack": "accepted"},
+            follow=True,
+        )
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        self.recipe.refresh_from_db()
+        self.assertTrue(self.recipe.tags.filter(name__iexact="Broring").exists())
+
+    def test_quick_add_similar_tag_skipped_keeps_typed_name(self):
+        Tag.objects.create(name="Broring", slug="broring")
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(
+            url,
+            {"tag": "boring", "similar_tag_ack": "skipped"},
+            follow=True,
+        )
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        self.recipe.refresh_from_db()
+        self.assertTrue(self.recipe.tags.filter(name__iexact="boring").exists())
+        self.assertFalse(self.recipe.tags.filter(name__iexact="Broring").exists())
+        self.assertTrue(Tag.objects.filter(name__iexact="Broring").exists())
+
+    def test_quick_add_duplicate_tag_shows_message(self):
+        tag = Tag.objects.create(name="Brunch", slug="brunch")
+        self.recipe.tags.add(tag)
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": "brunch"}, follow=True)
+        message_text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("already", message_text.lower())
+
+    def test_quick_add_tag_requires_permission(self):
+        self.client.force_login(self.other_user)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": "Nope"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_quick_add_tag_empty_rejects(self):
+        self.client.force_login(self.owner)
+        url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
+        response = self.client.post(url, {"tag": ""}, follow=True)
+        message_text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("enter", message_text.lower())
+
+    def test_recipe_list_filters_by_single_tag(self):
+        self.client.force_login(self.other_user)
+        t = Tag.objects.create(name="Snack", slug="snack")
+        self.recipe.tags.add(t)
+        Recipe.objects.create(owner=self.owner, title="Other Dish")
+        response = self.client.get(reverse("recipes:list"), {"tag": "snack"})
+        body = response.content.decode()
+        self.assertIn("Sunday Pancakes", body)
+        self.assertNotIn("Other Dish", body)
+
+    def test_recipe_list_partial_returns_tag_filter_sync_fragment(self):
+        self.client.force_login(self.other_user)
+        t = Tag.objects.create(name="Snack", slug="snack")
+        self.recipe.tags.add(t)
+        response = self.client.get(reverse("recipes:list"), {"partial": "1"})
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn("data-recipe-list-sync-extras", body)
+        self.assertIn('data-tag-slug="snack"', body)
+
+    def test_recipe_list_tag_chips_show_active_recipe_counts(self):
+        self.client.force_login(self.other_user)
+        t = Tag.objects.create(name="Snack", slug="snack")
+        self.recipe.tags.add(t)
+        second = Recipe.objects.create(owner=self.owner, title="Granola Bowl", description="")
+        second.tags.add(t)
+        deleted = Recipe.objects.create(owner=self.owner, title="Old Snack", description="")
+        deleted.tags.add(t)
+        deleted.deleted_at = timezone.now()
+        deleted.save(update_fields=["deleted_at", "updated_at"])
+        response = self.client.get(reverse("recipes:list"))
+        body = response.content.decode()
+        self.assertRegex(
+            body,
+            (
+                r'data-tag-slug="snack"[^>]*>[\s\n]*Snack\s*'
+                r'<span class="search-tag-chip-count">\s*\(2\)\s*</span>'
+            ),
+        )
+        self.assertNotRegex(body, r'class="search-tag-chip-count">\s*\(3\)\s*</span>')
+
+    def test_recipe_list_tag_chips_ordered_by_recipe_count_desc(self):
+        self.client.force_login(self.other_user)
+        rare = Tag.objects.create(name="Rare Tag", slug="rare-tag")
+        common = Tag.objects.create(name="Common Tag", slug="common-tag")
+        self.recipe.tags.add(rare, common)
+        second = Recipe.objects.create(owner=self.owner, title="Second Dish", description="")
+        second.tags.add(common)
+        third = Recipe.objects.create(owner=self.owner, title="Third Dish", description="")
+        third.tags.add(common)
+        response = self.client.get(reverse("recipes:list"))
+        body = response.content.decode()
+        self.assertLess(
+            body.index('data-tag-slug="common-tag"'),
+            body.index('data-tag-slug="rare-tag"'),
+        )
+
+    def test_recipe_list_search_tags_only_tags_on_matching_recipes(self):
+        self.client.force_login(self.other_user)
+        only_match = Tag.objects.create(name="On Match", slug="on-match")
+        no_match = Tag.objects.create(name="Not On Match", slug="not-on-match")
+        self.recipe.tags.add(only_match)
+        other = Recipe.objects.create(owner=self.owner, title="Other Bowl", description="beta")
+        other.tags.add(no_match)
+        response = self.client.get(reverse("recipes:list"), {"q": "Sunday"})
+        body = response.content.decode()
+        self.assertIn('data-tag-slug="on-match"', body)
+        self.assertNotIn('data-tag-slug="not-on-match"', body)
+
+    def test_recipe_list_tag_chip_counts_reflect_current_page_only(self):
+        self.client.force_login(self.other_user)
+        bulk = Tag.objects.create(name="Bulk", slug="bulk-tag")
+        with patch.object(RecipeListView, "paginate_by", 2):
+            for i in range(3):
+                r = Recipe.objects.create(
+                    owner=self.owner,
+                    title=f"Zzz Paged {i}",
+                    description="",
+                )
+                r.tags.add(bulk)
+            response1 = self.client.get(reverse("recipes:list"), {"page": "1"})
+            body1 = response1.content.decode()
+            idx1 = body1.index('data-tag-slug="bulk-tag"')
+            self.assertRegex(
+                body1[idx1 : idx1 + 400],
+                r'<span class="search-tag-chip-count">\s*\(1\)\s*</span>',
+            )
+            response2 = self.client.get(reverse("recipes:list"), {"page": "2"})
+            body2 = response2.content.decode()
+            idx2 = body2.index('data-tag-slug="bulk-tag"')
+            self.assertRegex(
+                body2[idx2 : idx2 + 400],
+                r'<span class="search-tag-chip-count">\s*\(2\)\s*</span>',
+            )
+
+    def test_recipe_list_filter_two_tags_requires_both(self):
+        self.client.force_login(self.other_user)
+        vegan = Tag.objects.create(name="Vegan", slug="vegan")
+        fast = Tag.objects.create(name="Fast", slug="fast")
+        self.recipe.tags.set([vegan, fast])
+        only_vegan = Recipe.objects.create(owner=self.owner, title="Only Vegan Tag")
+        only_vegan.tags.add(vegan)
+        url = f"{reverse('recipes:list')}?tag=vegan&tag=fast"
+        response = self.client.get(url)
+        body = response.content.decode()
+        self.assertIn("Sunday Pancakes", body)
+        self.assertNotIn("Only Vegan Tag", body)
+
     def test_authenticated_user_can_create_recipe(self):
         self.client.force_login(self.other_user)
 
@@ -135,6 +479,7 @@ class RecipeWorkflowTests(TestCase):
                 "cook_time_minutes": "30",
                 "servings": "6",
                 "source_url": "https://example.com/soup",
+                **tag_formset_post_data(["soup", "weeknight"]),
                 "ingredients-TOTAL_FORMS": "1",
                 "ingredients-INITIAL_FORMS": "0",
                 "ingredients-MIN_NUM_FORMS": "0",
@@ -161,6 +506,8 @@ class RecipeWorkflowTests(TestCase):
         self.assertEqual(recipe.owner, self.other_user)
         self.assertEqual(recipe.ingredients.count(), 1)
         self.assertEqual(recipe.steps.count(), 1)
+        tag_slugs = set(recipe.tags.values_list("slug", flat=True))
+        self.assertEqual(tag_slugs, {"soup", "weeknight"})
 
     def test_recipe_form_has_dynamic_formset_hooks_without_extra_delete_boxes(self):
         self.client.force_login(self.other_user)
@@ -168,14 +515,45 @@ class RecipeWorkflowTests(TestCase):
         response = self.client.get(reverse("recipes:create"))
         content = response.content.decode()
 
-        self.assertContains(response, "data-formset-template", count=3)
+        self.assertContains(response, "data-formset-template", count=4)
         self.assertContains(response, "data-unsaved-warning")
         self.assertContains(response, "data-discard-changes", count=1)
         self.assertContains(response, "Back to recipes")
-        self.assertNotContains(response, 'type="checkbox" name="ingredients-0-DELETE"')
+        self.assertNotContains(response, 'type="checkbox" name="tags-0-DELETE"')
         self.assertNotContains(response, 'data-form-row draggable="true"')
         self.assertContains(response, 'data-drag-handle aria-label="Drag to reorder ingredient"')
         self.assertLess(content.index("<h2>Photos</h2>"), content.index("<h2>Ingredients</h2>"))
+
+    def test_recipe_edit_tag_suggestions_exclude_orphan_tags(self):
+        Tag.objects.create(name="OrphanOnly", slug="orphan-only")
+        on_recipe = Tag.objects.create(name="OnActive", slug="on-active")
+        self.recipe.tags.add(on_recipe)
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+        )
+        slugs = {t.slug for t in response.context["tag_suggestions"]}
+        self.assertIn("on-active", slugs)
+        self.assertNotIn("orphan-only", slugs)
+
+    def test_recipe_edit_tag_suggestions_exclude_tags_only_on_soft_deleted_recipes(self):
+        only_deleted = Tag.objects.create(name="OnlyDeleted", slug="only-deleted")
+        deleted_recipe = Recipe.objects.create(
+            owner=self.owner,
+            title="Trashed Soup",
+            description="x",
+            deleted_at=timezone.now(),
+        )
+        deleted_recipe.tags.add(only_deleted)
+        active_tag = Tag.objects.create(name="StillHere", slug="still-here")
+        self.recipe.tags.add(active_tag)
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+        )
+        slugs = {t.slug for t in response.context["tag_suggestions"]}
+        self.assertIn("still-here", slugs)
+        self.assertNotIn("only-deleted", slugs)
 
     def test_non_owner_cannot_edit_recipe(self):
         self.client.force_login(self.other_user)
@@ -188,17 +566,22 @@ class RecipeWorkflowTests(TestCase):
 
     def test_edit_recipe_shows_single_extra_rows_for_existing_items(self):
         self.client.force_login(self.owner)
+        brunch = Tag.objects.create(name="Brunch", slug="brunch")
+        self.recipe.tags.add(brunch)
 
         response = self.client.get(reverse("recipes:update", kwargs={"slug": self.recipe.slug}))
 
         ingredient_formset = response.context["ingredient_formset"]
         step_formset = response.context["step_formset"]
+        tag_formset = response.context["tag_formset"]
         self.assertContains(response, self.recipe.get_absolute_url())
         self.assertContains(response, "Back to recipe")
         self.assertEqual(ingredient_formset.initial_form_count(), 1)
         self.assertEqual(step_formset.initial_form_count(), 1)
         self.assertEqual(ingredient_formset.total_form_count(), 2)
         self.assertEqual(step_formset.total_form_count(), 2)
+        self.assertEqual(tag_formset.initial_form_count(), 1)
+        self.assertEqual(tag_formset.total_form_count(), 2)
 
     def test_order_only_blank_extra_rows_are_ignored_on_edit(self):
         self.client.force_login(self.owner)
@@ -214,6 +597,7 @@ class RecipeWorkflowTests(TestCase):
                 "cook_time_minutes": str(self.recipe.cook_time_minutes),
                 "servings": str(self.recipe.servings),
                 "source_url": "",
+                **tag_formset_post_data([""]),
                 "ingredients-TOTAL_FORMS": "2",
                 "ingredients-INITIAL_FORMS": "1",
                 "ingredients-MIN_NUM_FORMS": "0",
@@ -257,6 +641,7 @@ class RecipeWorkflowTests(TestCase):
                 "cook_time_minutes": str(self.recipe.cook_time_minutes),
                 "servings": str(self.recipe.servings),
                 "source_url": "",
+                **tag_formset_post_data([""]),
                 "ingredients-TOTAL_FORMS": "2",
                 "ingredients-INITIAL_FORMS": "1",
                 "ingredients-MIN_NUM_FORMS": "0",

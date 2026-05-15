@@ -47,7 +47,7 @@
 
   <div class="toast-stack" aria-live="polite" aria-atomic="true">
     {% for message in messages %}
-      <div class="message {{ message.tags }}" data-toast>
+      <div class="message {{ message.tags }}" data-toast data-toast-ms="7000">
         <span>{{ message }}</span>
         <button class="toast-close" type="button" aria-label="Dismiss message">×</button>
       </div>

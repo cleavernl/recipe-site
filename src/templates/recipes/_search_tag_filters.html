@@ -1,0 +1,38 @@
+<div class="search-tag-filters" data-recipe-tag-filters>
+  {% if filter_tags %}
+    <div class="tag-overflow tag-overflow--search" data-tag-overflow data-tag-overflow-close-on-pick>
+      <div class="tag-overflow-main" data-tag-overflow-main>
+        <div
+          class="search-tag-chips tag-overflow-row"
+          data-tag-overflow-row
+          role="group"
+          aria-label="Filter by tags"
+        >
+          {% for tag in filter_tags %}
+            <button
+              type="button"
+              class="search-tag-chip{% if tag.slug in list_tag_slugs %} is-selected{% endif %}"
+              data-tag-slug="{{ tag.slug }}"
+              aria-pressed="{% if tag.slug in list_tag_slugs %}true{% else %}false{% endif %}"
+            >
+              {{ tag.name }} <span class="search-tag-chip-count">({{ tag.recipe_count }})</span>
+            </button>
+          {% endfor %}
+        </div>
+        <details class="tag-overflow-details" data-tag-overflow-details hidden>
+          <summary class="tag-overflow-summary" aria-label="More tag filters">
+            +<span data-tag-overflow-count>0</span>
+          </summary>
+          <div class="tag-overflow-panel-shell">
+            <div class="tag-overflow-panel tag-overflow-panel--search" data-tag-overflow-panel></div>
+          </div>
+        </details>
+      </div>
+    </div>
+  {% endif %}
+  <div class="search-tag-hidden-inputs" data-recipe-tag-hidden-inputs aria-hidden="true">
+    {% for slug in list_tag_slugs %}
+      <input type="hidden" name="tag" value="{{ slug }}">
+    {% endfor %}
+  </div>
+</div>

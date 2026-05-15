@@ -1,9 +1,139 @@
 from __future__ import annotations
 
-from django import forms
-from django.forms import BaseInlineFormSet, inlineformset_factory
+import difflib
 
-from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto
+from django import forms
+from django.core.exceptions import ValidationError
+from django.forms import BaseFormSet, BaseInlineFormSet, formset_factory, inlineformset_factory
+
+from recipes.models import (
+    Comment,
+    Ingredient,
+    InstructionStep,
+    Rating,
+    Recipe,
+    RecipePhoto,
+    Tag,
+    parse_recipe_tag_names,
+)
+
+
+def similar_tag_pairs_for_names(names: list[str]) -> list[tuple[str, str]]:
+    """Pairs (as_typed, existing_canonical_name) for tags close to an existing tag (not exact)."""
+    if not names:
+        return []
+    existing = list(Tag.objects.order_by("name").values_list("name", flat=True))
+    if not existing:
+        return []
+    lowered_to_display = {e.lower(): e for e in existing}
+    lowered_names = list(lowered_to_display.keys())
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for name in names:
+        if Tag.objects.filter(name__iexact=name).exists():
+            continue
+        matches = difflib.get_close_matches(name.lower(), lowered_names, n=1, cutoff=0.78)
+        if not matches:
+            continue
+        canonical = lowered_to_display[matches[0]]
+        if canonical.lower() == name.lower():
+            continue
+        key = (name, canonical)
+        if key not in seen:
+            seen.add(key)
+            pairs.append(key)
+    return pairs
+
+
+def similar_notes_for_new_tag_names(names: list[str]) -> list[str]:
+    """Human-readable notes (legacy / tests); prefer similar_tag_pairs_for_names for UI."""
+    return [
+        f"'{typed}' is similar to the existing tag '{suggested}'."
+        for typed, suggested in similar_tag_pairs_for_names(names)
+    ]
+
+
+class RecipeTagLineForm(forms.Form):
+    tag_name = forms.CharField(
+        label="Tag",
+        max_length=64,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "e.g. weeknight",
+                "autocomplete": "off",
+                "aria-autocomplete": "list",
+                "data-tag-suggest": "true",
+            },
+        ),
+    )
+
+    def clean_tag_name(self) -> str:
+        raw = self.cleaned_data.get("tag_name") or ""
+        return " ".join(str(raw).split()).strip()[:64]
+
+
+class RecipeTagLineFormSetClass(BaseFormSet):
+    """One row per tag; always at least one blank row (extra=1)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.similar_tag_notes: list[str] = []
+        self.similar_tag_pairs: list[tuple[str, str]] = []
+
+    def clean(self):
+        super().clean()
+        names_in_order: list[str] = []
+        seen_lower: set[str] = set()
+        for form in self.forms:
+            if self._should_delete_form(form):
+                continue
+            if not hasattr(form, "cleaned_data"):
+                continue
+            name = (form.cleaned_data.get("tag_name") or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen_lower:
+                raise ValidationError(
+                    f"Duplicate tag “{name}”. Each tag can only appear once.",
+                )
+            seen_lower.add(key)
+            names_in_order.append(name)
+        if len(names_in_order) > 40:
+            raise ValidationError("You can add at most 40 tags to one recipe.")
+        ack = (self.data.get("similar_tags_ack") or "").strip() if self.data is not None else ""
+        if ack == "skipped":
+            self.similar_tag_pairs = []
+            self.similar_tag_notes = []
+            return self.cleaned_data
+        self.similar_tag_pairs = similar_tag_pairs_for_names(names_in_order)
+        self.similar_tag_notes = [
+            f"'{a}' is similar to the existing tag '{b}'." for a, b in self.similar_tag_pairs
+        ]
+        return self.cleaned_data
+
+    def ordered_tag_names(self) -> list[str]:
+        """Non-empty tag names in form order (after successful is_valid)."""
+        names: list[str] = []
+        for form in self.forms:
+            if self._should_delete_form(form):
+                continue
+            if not form.cleaned_data:
+                continue
+            name = (form.cleaned_data.get("tag_name") or "").strip()
+            if name:
+                names.append(name)
+        return names
+
+
+RecipeTagLineFormSet = formset_factory(
+    RecipeTagLineForm,
+    formset=RecipeTagLineFormSetClass,
+    extra=1,
+    max_num=40,
+    can_delete=True,
+)
 
 
 class OptionalOrderMixin:
@@ -42,6 +172,8 @@ class InstructionStepFormSetClass(ExistingRowsSingleExtraFormSet):
 
 
 class RecipeForm(forms.ModelForm):
+    similar_tags_ack = forms.CharField(required=False, widget=forms.HiddenInput)
+
     source_url = forms.URLField(required=False, assume_scheme="https")
 
     class Meta:
@@ -57,6 +189,34 @@ class RecipeForm(forms.ModelForm):
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
         }
+
+
+class RecipeQuickAddTagForm(forms.Form):
+    """Single-tag POST from the recipe detail page (first token if comma-separated)."""
+
+    similar_tag_ack = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    tag = forms.CharField(
+        label="Tag",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "New tag",
+                "autocomplete": "off",
+                "aria-autocomplete": "list",
+                "data-tag-suggest": "true",
+            },
+        ),
+    )
+
+    def clean_tag(self) -> str:
+        raw = self.cleaned_data.get("tag") or ""
+        names = parse_recipe_tag_names(raw, max_tags=1)
+        if not names:
+            msg = "Enter a tag name."
+            raise ValidationError(msg)
+        return names[0]
 
 
 class IngredientForm(OptionalOrderMixin, forms.ModelForm):

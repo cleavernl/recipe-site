@@ -26,6 +26,25 @@
     {% endif %}
     <div class="recipe-card-body">
       <h2>{{ recipe.title }}</h2>
+      {% if recipe.tags.exists %}
+        <div class="tag-overflow recipe-card-tags-overflow" data-tag-overflow>
+          <div class="tag-overflow-main" data-tag-overflow-main>
+            <div class="recipe-card-tags tag-overflow-row" data-tag-overflow-row aria-label="Tags">
+              {% for tag in recipe.tags.all %}
+                <span class="recipe-card-tag">{{ tag.name }}</span>
+              {% endfor %}
+            </div>
+            <details class="tag-overflow-details" data-tag-overflow-details hidden>
+              <summary class="tag-overflow-summary" aria-label="More tags on this recipe">
+                +<span data-tag-overflow-count>0</span>
+              </summary>
+              <div class="tag-overflow-panel-shell">
+                <div class="tag-overflow-panel tag-overflow-panel--card" data-tag-overflow-panel></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      {% endif %}
       {% if recipe.description %}<p>{{ recipe.description|truncatewords:24 }}</p>{% endif %}
       <dl class="meta-list">
         {% if recipe.total_time_minutes %}<div><dt>Total</dt><dd>{{ recipe.total_time_minutes }} min</dd></div>{% endif %}

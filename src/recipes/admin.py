@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto
+from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto, Tag
 
 
 class IngredientInline(admin.TabularInline):
@@ -26,7 +26,14 @@ class RecipeAdmin(admin.ModelAdmin):
     list_filter = ("deleted_at", "created_at", "updated_at")
     search_fields = ("title", "description", "ingredients__name")
     prepopulated_fields = {"slug": ("title",)}
+    filter_horizontal = ("tags",)
     inlines = [IngredientInline, InstructionStepInline, RecipePhotoInline]
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug")
+    search_fields = ("name", "slug")
 
 
 @admin.register(Comment)

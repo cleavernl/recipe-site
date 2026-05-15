@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+  /** Auto-dismiss for Django messages and client `showToast` (same as formset row undo). */
+  const DEFAULT_TOAST_MS = 7000;
+
   const toastStack = document.querySelector(".toast-stack");
   const root = document.documentElement;
   const savedTheme = window.localStorage.getItem("theme");
@@ -36,10 +39,16 @@ document.addEventListener("DOMContentLoaded", () => {
     window.setTimeout(() => toast.remove(), 260);
   };
 
-  const scheduleToast = (toast, duration = 4200) => {
+  const scheduleToast = (toast, duration = DEFAULT_TOAST_MS) => {
+    const priorId = Number.parseInt(toast.dataset.timeoutId || "", 10);
+    if (priorId) {
+      window.clearTimeout(priorId);
+    }
     const close = toast.querySelector(".toast-close");
     close?.addEventListener("click", () => dismissToast(toast));
-    const timeoutId = window.setTimeout(() => dismissToast(toast), duration);
+    const fromAttr = Number.parseInt(toast.dataset.toastMs || "", 10);
+    const ms = Number.isFinite(fromAttr) && fromAttr > 0 ? fromAttr : duration;
+    const timeoutId = window.setTimeout(() => dismissToast(toast), ms);
     toast.dataset.timeoutId = String(timeoutId);
   };
 
@@ -71,13 +80,241 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
     toastStack.append(toast);
-    scheduleToast(toast, options.duration || 4200);
+    scheduleToast(toast, options.duration ?? DEFAULT_TOAST_MS);
   };
 
   document.querySelectorAll("[data-toast]").forEach(scheduleToast);
 
+  (() => {
+    const datalist = document.getElementById("recipe-tag-suggestions");
+    if (!datalist) {
+      return;
+    }
+
+    let panel = document.getElementById("recipe-tag-suggest-panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "recipe-tag-suggest-panel";
+      panel.className = "tag-suggest-panel";
+      panel.hidden = true;
+      panel.setAttribute("role", "listbox");
+      panel.setAttribute("aria-label", "Existing tag names");
+      document.body.append(panel);
+    }
+
+    let activeInput = /** @type {HTMLInputElement | null} */ (null);
+    let items = /** @type {string[]} */ ([]);
+    let highlightIndex = -1;
+
+    const readSuggestions = () =>
+      Array.from(datalist.querySelectorAll("option"))
+        .map((o) => o.value.trim())
+        .filter(Boolean);
+
+    const filterSuggestions = (query) => {
+      const uniq = [...new Set(readSuggestions())];
+      uniq.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+      const q = query.trim().toLowerCase();
+      if (!q) {
+        return uniq.slice(0, 25);
+      }
+      return uniq.filter((name) => name.toLowerCase().includes(q)).slice(0, 25);
+    };
+
+    const positionPanel = (input) => {
+      const r = input.getBoundingClientRect();
+      const gap = 4;
+      panel.style.position = "fixed";
+      panel.style.left = `${r.left}px`;
+      panel.style.top = `${r.bottom + gap}px`;
+      panel.style.width = `${Math.max(r.width, 160)}px`;
+    };
+
+    const updateHighlightClasses = () => {
+      panel.querySelectorAll(".tag-suggest-item").forEach((el, i) => {
+        el.classList.toggle("tag-suggest-item--active", i === highlightIndex);
+        el.setAttribute("aria-selected", i === highlightIndex ? "true" : "false");
+      });
+    };
+
+    const scrollActiveIntoView = () => {
+      const el = panel.querySelector(`.tag-suggest-item:nth-child(${highlightIndex + 1})`);
+      if (el instanceof HTMLElement) {
+        el.scrollIntoView({ block: "nearest" });
+      }
+    };
+
+    const closePanel = () => {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      items = [];
+      highlightIndex = -1;
+      activeInput = null;
+    };
+
+    /** Apply a picked suggestion; on quick-add tag form, submit immediately instead of only filling the field. */
+    const applySuggestionPick = (input, name) => {
+      input.value = name;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      closePanel();
+      const quickForm = input.closest("form[data-recipe-quick-tag-form]");
+      if (quickForm instanceof HTMLFormElement) {
+        const submitter = quickForm.querySelector("button[type='submit']");
+        if (submitter instanceof HTMLButtonElement) {
+          submitter.click();
+        } else {
+          quickForm.requestSubmit();
+        }
+        return;
+      }
+      input.focus();
+    };
+
+    const renderPanel = () => {
+      if (!activeInput) {
+        return;
+      }
+      items = filterSuggestions(activeInput.value);
+      positionPanel(activeInput);
+      panel.innerHTML = "";
+      highlightIndex = items.length > 0 ? 0 : -1;
+      items.forEach((name, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tag-suggest-item";
+        btn.setAttribute("role", "option");
+        btn.setAttribute("aria-selected", index === highlightIndex ? "true" : "false");
+        btn.textContent = name;
+        btn.addEventListener("click", () => {
+          const input = activeInput;
+          if (!input) {
+            return;
+          }
+          applySuggestionPick(input, name);
+        });
+        panel.append(btn);
+      });
+      if (items.length === 0) {
+        panel.hidden = true;
+      } else {
+        panel.hidden = false;
+        updateHighlightClasses();
+      }
+    };
+
+    const openFor = (input) => {
+      activeInput = input;
+      renderPanel();
+    };
+
+    panel.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+    });
+
+    document.addEventListener("focusin", (e) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.dataset.tagSuggest === "true") {
+        openFor(t);
+        return;
+      }
+      if (activeInput && t instanceof Node && !panel.contains(t) && t !== activeInput) {
+        closePanel();
+      }
+    });
+
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.dataset.tagSuggest !== "true") {
+        return;
+      }
+      activeInput = t;
+      renderPanel();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (!activeInput || panel.hidden || document.activeElement !== activeInput) {
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        highlightIndex = Math.min(highlightIndex + 1, items.length - 1);
+        updateHighlightClasses();
+        scrollActiveIntoView();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        highlightIndex = Math.max(highlightIndex - 1, 0);
+        updateHighlightClasses();
+        scrollActiveIntoView();
+      } else if (e.key === "Enter") {
+        if (highlightIndex >= 0 && items[highlightIndex]) {
+          e.preventDefault();
+          const input = activeInput;
+          const picked = items[highlightIndex];
+          applySuggestionPick(input, picked);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closePanel();
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      const t = e.target;
+      if (!activeInput || panel.hidden) {
+        return;
+      }
+      if (!(t instanceof Node)) {
+        return;
+      }
+      if (!panel.contains(t) && t !== activeInput) {
+        closePanel();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (activeInput && !panel.hidden) {
+        positionPanel(activeInput);
+      }
+    });
+
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (activeInput && !panel.hidden) {
+          positionPanel(activeInput);
+        }
+      },
+      true,
+    );
+  })();
+
   document.querySelectorAll("[data-print-recipe]").forEach((button) => {
     button.addEventListener("click", () => window.print());
+  });
+
+  document.querySelectorAll(".recipe-quick-tag").forEach((details) => {
+    if (!(details instanceof HTMLDetailsElement)) {
+      return;
+    }
+    let onDocClick = null;
+    details.addEventListener("toggle", () => {
+      if (onDocClick) {
+        document.removeEventListener("click", onDocClick);
+        onDocClick = null;
+      }
+      if (!details.open) {
+        return;
+      }
+      onDocClick = (event) => {
+        if (!(event.target instanceof Node) || !details.contains(event.target)) {
+          details.open = false;
+        }
+      };
+      window.setTimeout(() => {
+        document.addEventListener("click", onDocClick);
+      }, 0);
+    });
   });
 
   document.querySelectorAll("form[data-unsaved-warning]").forEach((form) => {
@@ -306,7 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       showToast(removalMessage(row), "success", {
         actionLabel: "Undo",
-        duration: 7000,
+        duration: DEFAULT_TOAST_MS,
         onAction: () => {
           if (deleteInput instanceof HTMLInputElement) {
             if (deleteInput.type === "hidden") {
@@ -403,13 +640,253 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  const tagOverflowResizeObserver = Symbol("recipeTagOverflowResizeObserver");
+
+  const initTagOverflow = (root = document) => {
+    root.querySelectorAll("[data-tag-overflow]").forEach((overflowRoot) => {
+      const main = overflowRoot.querySelector("[data-tag-overflow-main]");
+      const row = overflowRoot.querySelector("[data-tag-overflow-row]");
+      const details = overflowRoot.querySelector("[data-tag-overflow-details]");
+      const panel = overflowRoot.querySelector("[data-tag-overflow-panel]");
+      if (
+        !(main instanceof HTMLElement) ||
+        !(row instanceof HTMLElement) ||
+        !(details instanceof HTMLDetailsElement) ||
+        !(panel instanceof HTMLElement)
+      ) {
+        return;
+      }
+
+      const existing = overflowRoot[tagOverflowResizeObserver];
+      if (existing instanceof ResizeObserver) {
+        existing.disconnect();
+      }
+
+      const ensureOrder = () => {
+        if (overflowRoot.dataset.overflowOrdered === "1") {
+          return;
+        }
+        [...row.children, ...panel.children].forEach((child, index) => {
+          child.dataset.overflowOrder = String(index);
+        });
+        overflowRoot.dataset.overflowOrdered = "1";
+      };
+
+      const collectOrdered = () =>
+        [...row.children, ...panel.children].sort(
+          (a, b) =>
+            Number.parseInt(a.dataset.overflowOrder || "0", 10) -
+            Number.parseInt(b.dataset.overflowOrder || "0", 10),
+        );
+
+      const consolidateToRow = () => {
+        const ordered = collectOrdered();
+        panel.replaceChildren();
+        row.replaceChildren();
+        ordered.forEach((el) => {
+          row.append(el);
+        });
+      };
+
+      const syncCountAndLabel = (count) => {
+        const countEl = overflowRoot.querySelector("[data-tag-overflow-count]");
+        if (countEl) {
+          countEl.textContent = String(count);
+        }
+        const summary = details.querySelector("summary");
+        if (summary instanceof HTMLElement) {
+          if (count > 0) {
+            summary.setAttribute("aria-label", `Show ${count} more tags`);
+          } else {
+            summary.removeAttribute("aria-label");
+          }
+        }
+      };
+
+      const layout = () => {
+        ensureOrder();
+        consolidateToRow();
+        details.open = false;
+
+        if (main.clientWidth < 40) {
+          details.hidden = true;
+          syncCountAndLabel(0);
+          return;
+        }
+
+        if (row.scrollWidth <= row.clientWidth + 1) {
+          details.hidden = true;
+          syncCountAndLabel(0);
+          return;
+        }
+
+        details.hidden = false;
+
+        let guard = 0;
+        while (row.scrollWidth > row.clientWidth + 1 && row.children.length > 0 && guard < 240) {
+          const widthBefore = row.scrollWidth;
+          const last = row.lastElementChild;
+          if (!last) {
+            break;
+          }
+          panel.prepend(last);
+          syncCountAndLabel(panel.childElementCount);
+          if (row.scrollWidth >= widthBefore) {
+            row.append(last);
+            syncCountAndLabel(panel.childElementCount);
+            break;
+          }
+          guard += 1;
+        }
+
+        if (panel.childElementCount === 0) {
+          details.hidden = true;
+          details.open = false;
+          syncCountAndLabel(0);
+        }
+      };
+
+      const ro = new ResizeObserver(() => {
+        window.requestAnimationFrame(layout);
+      });
+      overflowRoot[tagOverflowResizeObserver] = ro;
+      ro.observe(main);
+      window.requestAnimationFrame(layout);
+
+      if (
+        overflowRoot.hasAttribute("data-tag-overflow-close-on-pick") &&
+        overflowRoot.dataset.tagOverflowPickCloseBound !== "1"
+      ) {
+        overflowRoot.dataset.tagOverflowPickCloseBound = "1";
+        panel.addEventListener("click", (event) => {
+          if (!details.open) {
+            return;
+          }
+          if (event.target.closest(".search-tag-chip")) {
+            details.open = false;
+          }
+        });
+      }
+    });
+  };
+
   initRecipeCarousels(document);
+  initTagOverflow(document);
 
   const liveSearchForm = document.querySelector("[data-recipe-list-search]");
   const liveSearchDynamic = document.querySelector("[data-recipe-list-dynamic]");
   if (liveSearchForm instanceof HTMLFormElement && liveSearchDynamic) {
     const input = liveSearchForm.querySelector("input[name='q']");
+    const sortInput = liveSearchForm.querySelector("[data-recipe-sort-input]");
+    const sortCombobox = liveSearchForm.querySelector("[data-recipe-sort-combobox]");
+    const sortTrigger = liveSearchForm.querySelector("[data-recipe-sort-trigger]");
+    const sortListbox = liveSearchForm.querySelector("[data-recipe-sort-listbox]");
+    const sortTriggerLabel = liveSearchForm.querySelector("[data-recipe-sort-trigger-label]");
+    const sortDirInput = liveSearchForm.querySelector("[data-recipe-sort-dir]");
+    const sortDirToggle = liveSearchForm.querySelector("[data-recipe-sort-dir-toggle]");
     const randomPick = document.querySelector("[data-recipe-random-pick]");
+    const getTagHiddenRoot = () =>
+      liveSearchForm.querySelector("[data-recipe-tag-hidden-inputs]");
+    const getTagFiltersMount = () =>
+      liveSearchForm.querySelector("[data-recipe-tag-filters-mount]");
+    const sortTitle = "title";
+    const defaultSortDir = {
+      title: "asc",
+      rating: "desc",
+      cook_time: "asc",
+      prep_time: "asc",
+      ease: "asc",
+      updated: "desc",
+    };
+
+    const sortLabels = {
+      title: "Title",
+      rating: "Rating",
+      cook_time: "Cook time",
+      prep_time: "Prep time",
+      ease: "Ease",
+      updated: "Updated",
+    };
+    const validSortValues = new Set(Object.keys(defaultSortDir));
+
+    const getSortValue = () => {
+      if (!(sortInput instanceof HTMLInputElement)) {
+        return sortTitle;
+      }
+      const value = sortInput.value.trim();
+      return validSortValues.has(value) ? value : sortTitle;
+    };
+
+    const getDefaultDirForSort = (sortKey) => defaultSortDir[sortKey] || "asc";
+
+    const getSortDirValue = () => {
+      if (!(sortDirInput instanceof HTMLInputElement)) {
+        return getDefaultDirForSort(getSortValue());
+      }
+      const raw = sortDirInput.value.trim().toLowerCase();
+      if (raw === "asc" || raw === "desc") {
+        return raw;
+      }
+      return getDefaultDirForSort(getSortValue());
+    };
+
+    const syncSortDirToggle = (dir) => {
+      if (!(sortDirToggle instanceof HTMLButtonElement)) {
+        return;
+      }
+      sortDirToggle.dataset.sortDir = dir;
+      sortDirToggle.setAttribute(
+        "aria-label",
+        dir === "asc" ? "Ascending order. Click to reverse." : "Descending order. Click to reverse.",
+      );
+    };
+
+    const easeTooltip = (liveSearchForm.getAttribute("data-recipe-ease-tooltip") || "").trim();
+
+    const syncEaseTriggerTitle = () => {
+      if (!(sortTrigger instanceof HTMLButtonElement)) {
+        return;
+      }
+      sortTrigger.title = getSortValue() === "ease" && easeTooltip ? easeTooltip : "";
+    };
+
+    const getSortOptions = () =>
+      sortListbox ? [...sortListbox.querySelectorAll('[role="option"]')] : [];
+
+    const syncTriggerLabel = () => {
+      if (!(sortTriggerLabel instanceof HTMLElement)) {
+        return;
+      }
+      const value = getSortValue();
+      sortTriggerLabel.textContent = sortLabels[value] || sortLabels[sortTitle];
+    };
+
+    const syncListboxAriaSelected = () => {
+      const value = getSortValue();
+      getSortOptions().forEach((opt) => {
+        const isSelected = opt.getAttribute("data-value") === value;
+        opt.setAttribute("aria-selected", isSelected ? "true" : "false");
+      });
+    };
+
+    const closeSortListbox = () => {
+      if (!(sortListbox instanceof HTMLElement)) {
+        return;
+      }
+      sortListbox.hidden = true;
+      sortCombobox?.classList.remove("is-open");
+      sortTrigger?.setAttribute("aria-expanded", "false");
+    };
+
+    const openSortListbox = () => {
+      if (!(sortListbox instanceof HTMLElement)) {
+        return;
+      }
+      sortListbox.hidden = false;
+      sortCombobox?.classList.add("is-open");
+      sortTrigger?.setAttribute("aria-expanded", "true");
+    };
+
     if (input instanceof HTMLInputElement) {
       let debounceId = 0;
       let abortController = null;
@@ -428,7 +905,87 @@ document.addEventListener("DOMContentLoaded", () => {
         if (q) {
           params.set("q", q);
         }
+        liveSearchForm.querySelectorAll("[data-recipe-tag-hidden-inputs] input[name='tag']").forEach((el) => {
+          if (el instanceof HTMLInputElement && el.value) {
+            params.append("tag", el.value);
+          }
+        });
         randomPick.href = params.toString() ? `${base}?${params.toString()}` : base;
+      };
+
+      const appendSelectedTagsToParams = (params) => {
+        getTagHiddenRoot()?.querySelectorAll("input[name='tag']").forEach((el) => {
+          if (el instanceof HTMLInputElement && el.value) {
+            params.append("tag", el.value);
+          }
+        });
+      };
+
+      const appendSelectedTagsToUrl = (url) => {
+        while (url.searchParams.has("tag")) {
+          url.searchParams.delete("tag");
+        }
+        getTagHiddenRoot()?.querySelectorAll("input[name='tag']").forEach((el) => {
+          if (el instanceof HTMLInputElement && el.value) {
+            url.searchParams.append("tag", el.value);
+          }
+        });
+      };
+
+      const applySortToParams = (params) => {
+        const sort = getSortValue();
+        const dir = getSortDirValue();
+        const defaultDir = getDefaultDirForSort(sort);
+        const omitSortParams = sort === sortTitle && dir === getDefaultDirForSort(sortTitle);
+        if (!omitSortParams) {
+          params.set("sort", sort);
+        }
+        if (!omitSortParams && dir !== defaultDir) {
+          params.set("sort_dir", dir);
+        }
+        appendSelectedTagsToParams(params);
+      };
+
+      const applySortToUrl = (url) => {
+        const sort = getSortValue();
+        const dir = getSortDirValue();
+        const defaultDir = getDefaultDirForSort(sort);
+        const omitSortParams = sort === sortTitle && dir === getDefaultDirForSort(sortTitle);
+        if (omitSortParams) {
+          url.searchParams.delete("sort");
+          url.searchParams.delete("sort_dir");
+        } else {
+          url.searchParams.set("sort", sort);
+          if (dir === defaultDir) {
+            url.searchParams.delete("sort_dir");
+          } else {
+            url.searchParams.set("sort_dir", dir);
+          }
+        }
+        appendSelectedTagsToUrl(url);
+      };
+
+      const syncTagFiltersFromPartialHtml = (html) => {
+        const mount = getTagFiltersMount();
+        if (!(mount instanceof HTMLElement)) {
+          return;
+        }
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const extras = parsed.querySelector("[data-recipe-list-sync-extras]");
+        if (!(extras instanceof HTMLElement)) {
+          return;
+        }
+        const next = extras.querySelector("[data-recipe-tag-filters]");
+        const cur = mount.querySelector("[data-recipe-tag-filters]");
+        if (!(next instanceof HTMLElement)) {
+          return;
+        }
+        if (cur instanceof HTMLElement) {
+          cur.replaceWith(next.cloneNode(true));
+        } else {
+          mount.append(next.cloneNode(true));
+        }
+        initTagOverflow(liveSearchForm);
       };
 
       const runLiveSearch = async () => {
@@ -437,6 +994,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (q) {
           params.set("q", q);
         }
+        applySortToParams(params);
         params.set("partial", "1");
         abortController?.abort();
         abortController = new AbortController();
@@ -455,7 +1013,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           liveSearchDynamic.innerHTML = html;
+          syncTagFiltersFromPartialHtml(html);
           initRecipeCarousels(liveSearchDynamic);
+          initTagOverflow(liveSearchDynamic);
 
           const nextUrl = new URL(window.location.href);
           if (q) {
@@ -463,6 +1023,7 @@ document.addEventListener("DOMContentLoaded", () => {
           } else {
             nextUrl.searchParams.delete("q");
           }
+          applySortToUrl(nextUrl);
           nextUrl.searchParams.delete("page");
           nextUrl.searchParams.delete("partial");
           const search = nextUrl.searchParams.toString();
@@ -483,11 +1044,185 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       };
 
+      const selectSortValue = (nextValue) => {
+        if (!(sortInput instanceof HTMLInputElement)) {
+          return;
+        }
+        if (!validSortValues.has(nextValue)) {
+          return;
+        }
+        sortInput.value = nextValue;
+        syncTriggerLabel();
+        syncListboxAriaSelected();
+        closeSortListbox();
+        const nextDefault = getDefaultDirForSort(nextValue);
+        if (sortDirInput instanceof HTMLInputElement) {
+          sortDirInput.value = nextDefault;
+        }
+        syncSortDirToggle(nextDefault);
+        syncEaseTriggerTitle();
+        void runLiveSearch();
+        sortTrigger?.focus();
+      };
+
+      syncSortDirToggle(getSortDirValue());
+      syncTriggerLabel();
+      syncListboxAriaSelected();
+      syncEaseTriggerTitle();
+
       input.addEventListener("input", () => {
         syncRandomPickHref();
         window.clearTimeout(debounceId);
         debounceId = window.setTimeout(runLiveSearch, 280);
       });
+
+      liveSearchForm.addEventListener("click", (event) => {
+        const inFilters = event.target instanceof Element && event.target.closest("[data-recipe-tag-filters]");
+        if (!inFilters) {
+          return;
+        }
+        const btn = event.target.closest(".search-tag-chip");
+        const tagHiddenRoot = getTagHiddenRoot();
+        if (!(btn instanceof HTMLButtonElement) || !tagHiddenRoot) {
+          return;
+        }
+        event.preventDefault();
+        const slug = btn.dataset.tagSlug || "";
+        if (!slug) {
+          return;
+        }
+        const nextSelected = !btn.classList.contains("is-selected");
+        btn.classList.toggle("is-selected", nextSelected);
+        btn.setAttribute("aria-pressed", nextSelected ? "true" : "false");
+        tagHiddenRoot.querySelectorAll("input[name='tag']").forEach((inp) => {
+          if (inp instanceof HTMLInputElement && inp.value === slug) {
+            inp.remove();
+          }
+        });
+        if (nextSelected) {
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = "tag";
+          hidden.value = slug;
+          tagHiddenRoot.append(hidden);
+        }
+        syncRandomPickHref();
+        void runLiveSearch();
+      });
+
+      if (
+        sortCombobox instanceof HTMLElement &&
+        sortTrigger instanceof HTMLButtonElement &&
+        sortListbox instanceof HTMLElement
+      ) {
+        sortTrigger.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (sortListbox.hidden) {
+            openSortListbox();
+          } else {
+            closeSortListbox();
+          }
+        });
+
+        sortTrigger.addEventListener("keydown", (event) => {
+          if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            if (sortListbox.hidden) {
+              openSortListbox();
+            } else {
+              closeSortListbox();
+            }
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            const options = getSortOptions();
+            if (sortListbox.hidden) {
+              openSortListbox();
+            }
+            options[0]?.focus();
+            return;
+          }
+          if (event.key === "Escape" && !sortListbox.hidden) {
+            event.preventDefault();
+            closeSortListbox();
+            sortTrigger.focus();
+          }
+        });
+
+        sortListbox.addEventListener("click", (event) => {
+          const target = event.target;
+          const option = target instanceof Element ? target.closest("[data-value]") : null;
+          if (!(option instanceof HTMLElement)) {
+            return;
+          }
+          const nextValue = option.dataset.value || "";
+          selectSortValue(nextValue);
+        });
+
+        sortListbox.addEventListener("keydown", (event) => {
+          const options = getSortOptions();
+          const active = document.activeElement;
+          let index = options.indexOf(active);
+          if (index < 0) {
+            index = 0;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeSortListbox();
+            sortTrigger.focus();
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            const next = Math.min(index + 1, options.length - 1);
+            options[next]?.focus();
+            return;
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            if (index <= 0) {
+              closeSortListbox();
+              sortTrigger.focus();
+              return;
+            }
+            options[index - 1]?.focus();
+            return;
+          }
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            const current = options[index];
+            const nextValue = current?.dataset.value || "";
+            if (nextValue) {
+              selectSortValue(nextValue);
+            }
+          }
+        });
+
+        const onDocumentPointerDown = (event) => {
+          if (sortListbox.hidden) {
+            return;
+          }
+          const target = event.target;
+          if (!(target instanceof Node)) {
+            return;
+          }
+          if (sortCombobox.contains(target)) {
+            return;
+          }
+          closeSortListbox();
+        };
+        document.addEventListener("pointerdown", onDocumentPointerDown, true);
+      }
+
+      if (sortDirToggle instanceof HTMLButtonElement && sortDirInput instanceof HTMLInputElement) {
+        sortDirToggle.addEventListener("click", () => {
+          const next = getSortDirValue() === "asc" ? "desc" : "asc";
+          sortDirInput.value = next;
+          syncSortDirToggle(next);
+          void runLiveSearch();
+        });
+      }
 
       syncRandomPickHref();
     }
@@ -582,6 +1317,212 @@ document.addEventListener("DOMContentLoaded", () => {
       stars.setAttribute("aria-label", `${payload.rating} out of 5 stars`);
     }
   };
+
+  const createSimilarTagOverlayController = (overlay, panel, onEscape) => {
+    const prevBodyOverflow = document.body.style.overflow;
+
+    const listFocusables = () =>
+      Array.from(
+        panel.querySelectorAll(
+          "button:not([disabled]), [href], input:not([disabled]):not([type='hidden']), select:not([disabled]), textarea:not([disabled])",
+        ),
+      ).filter((el) => el instanceof HTMLElement);
+
+    const onKeydown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onEscape();
+        return;
+      }
+      if (e.key !== "Tab") {
+        return;
+      }
+      const list = listFocusables();
+      if (list.length === 0) {
+        return;
+      }
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    const deactivate = () => {
+      overlay.setAttribute("hidden", "");
+      document.body.style.overflow = prevBodyOverflow;
+      overlay.removeEventListener("keydown", onKeydown);
+    };
+
+    const activate = () => {
+      overlay.removeAttribute("hidden");
+      document.body.style.overflow = "hidden";
+      overlay.addEventListener("keydown", onKeydown);
+      const list = listFocusables();
+      (list[0] ?? panel).focus();
+    };
+
+    const armVisible = () => {
+      if (overlay.hasAttribute("hidden")) {
+        return;
+      }
+      document.body.style.overflow = "hidden";
+      overlay.addEventListener("keydown", onKeydown);
+      const list = listFocusables();
+      window.setTimeout(() => {
+        (list[0] ?? panel).focus();
+      }, 0);
+    };
+
+    return { activate, deactivate, armVisible };
+  };
+
+  const initRecipeEditSimilarTagModal = () => {
+    const overlay = document.getElementById("recipe-similar-tag-modal");
+    const dataEl = document.getElementById("recipe-similar-tag-pairs-json");
+    const form = document.querySelector("form[data-unsaved-warning]");
+    const ackInput = form?.querySelector("input[name='similar_tags_ack']");
+    const panel = overlay?.querySelector('[role="alertdialog"]');
+    if (
+      !(overlay instanceof HTMLElement) ||
+      !(panel instanceof HTMLElement) ||
+      !dataEl ||
+      !(form instanceof HTMLFormElement) ||
+      !(ackInput instanceof HTMLInputElement)
+    ) {
+      return;
+    }
+    let pairs;
+    try {
+      pairs = JSON.parse(dataEl.textContent);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(pairs) || pairs.length === 0) {
+      return;
+    }
+    const yes = panel.querySelector("[data-similar-tag-yes]");
+    const no = panel.querySelector("[data-similar-tag-no]");
+    const finish = () => {
+      yes?.removeEventListener("click", onYes);
+      no?.removeEventListener("click", onNo);
+    };
+    let overlayControl = { deactivate() {}, armVisible() {} };
+    const onYes = () => {
+      for (const row of pairs) {
+        if (!row || typeof row !== "object" || !("typed" in row) || !("suggested" in row)) {
+          continue;
+        }
+        const typed = String(row.typed);
+        const suggested = String(row.suggested);
+        form.querySelectorAll("input[name$='-tag_name']").forEach((inp) => {
+          if (inp instanceof HTMLInputElement && inp.value.trim() === typed) {
+            inp.value = suggested;
+          }
+        });
+      }
+      ackInput.value = "accepted";
+      overlayControl.deactivate();
+      finish();
+      HTMLFormElement.prototype.submit.call(form);
+    };
+    const onNo = () => {
+      ackInput.value = "skipped";
+      overlayControl.deactivate();
+      finish();
+      HTMLFormElement.prototype.submit.call(form);
+    };
+    overlayControl = createSimilarTagOverlayController(overlay, panel, onNo);
+    yes?.addEventListener("click", onYes);
+    no?.addEventListener("click", onNo);
+    overlayControl.armVisible();
+  };
+
+  const initRecipeQuickTagSimilarConfirm = () => {
+    document.querySelectorAll("[data-recipe-quick-tag-form]").forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      form.addEventListener("submit", async (event) => {
+        const tagInput = form.querySelector("input[name='tag']");
+        if (!(tagInput instanceof HTMLInputElement) || !tagInput.value.trim()) {
+          return;
+        }
+        event.preventDefault();
+        const fd = new FormData(form);
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            body: fd,
+            credentials: "same-origin",
+            headers: {
+              "X-Recipe-Similar-Tag-Check": "1",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          const data = await response.json();
+          if (!data || data.ok !== true) {
+            HTMLFormElement.prototype.submit.call(form);
+            return;
+          }
+          if (!data.need_confirm || !Array.isArray(data.pairs) || data.pairs.length === 0) {
+            HTMLFormElement.prototype.submit.call(form);
+            return;
+          }
+          const overlay = document.getElementById("recipe-quick-tag-similar-modal");
+          const panel = overlay?.querySelector('[role="alertdialog"]');
+          const body = panel?.querySelector("[data-quick-tag-similar-body]");
+          const pair = data.pairs[0];
+          if (!(overlay instanceof HTMLElement) || !(panel instanceof HTMLElement) || !body || !pair) {
+            HTMLFormElement.prototype.submit.call(form);
+            return;
+          }
+          const ackInput = form.querySelector("input[name='similar_tag_ack']");
+          if (!(ackInput instanceof HTMLInputElement)) {
+            HTMLFormElement.prototype.submit.call(form);
+            return;
+          }
+          body.textContent = `You entered “${pair.typed}”, which is close to the existing tag “${pair.suggested}”. Use the suggested spelling instead?`;
+          const yesBtn = panel.querySelector("[data-quick-tag-similar-yes]");
+          const noBtn = panel.querySelector("[data-quick-tag-similar-no]");
+          const cleanup = () => {
+            yesBtn?.removeEventListener("click", onYes);
+            noBtn?.removeEventListener("click", onNo);
+          };
+          let overlayControl = { deactivate() {} };
+          const onYes = () => {
+            tagInput.value = pair.suggested;
+            ackInput.value = "accepted";
+            overlayControl.deactivate();
+            cleanup();
+            HTMLFormElement.prototype.submit.call(form);
+          };
+          const onNo = () => {
+            ackInput.value = "skipped";
+            overlayControl.deactivate();
+            cleanup();
+            HTMLFormElement.prototype.submit.call(form);
+          };
+          overlayControl = createSimilarTagOverlayController(overlay, panel, onNo);
+          yesBtn?.addEventListener("click", onYes);
+          noBtn?.addEventListener("click", onNo);
+          overlayControl.activate();
+        } catch {
+          HTMLFormElement.prototype.submit.call(form);
+        }
+      });
+    });
+  };
+
+  initRecipeEditSimilarTagModal();
+  initRecipeQuickTagSimilarConfirm();
 
   document.querySelectorAll(".star-rating-form").forEach((form) => {
     updateStars(form);
