@@ -41,6 +41,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.UpdateLastSiteVisitMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -118,7 +119,8 @@ LOGGING = {
         "console": {"class": "logging.StreamHandler"},
     },
     "loggers": {
-        # Surfaces 5xx tracebacks to stderr (visible in `podman compose logs web`) when DEBUG is false.
+        # Surfaces 5xx tracebacks to stderr (visible in `podman compose logs web`)
+        # when DEBUG is false.
         "django.request": {
             "handlers": ["console"],
             "level": "ERROR",

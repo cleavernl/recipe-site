@@ -139,3 +139,30 @@ class ProfileTests(TestCase):
         self.assertRedirects(response, reverse("accounts:profile"))
         user.refresh_from_db()
         self.assertTrue(user.check_password("new-password-123-strong"))
+
+
+class SiteActivityMiddlewareTests(TestCase):
+    def test_authenticated_request_creates_site_activity_timestamp(self):
+        from accounts.models import UserSiteActivity
+
+        user = User.objects.create_user(username="pat", password="password-123")
+        self.assertFalse(UserSiteActivity.objects.filter(user=user).exists())
+
+        self.client.force_login(user)
+        self.client.get(reverse("recipes:list"))
+
+        activity = UserSiteActivity.objects.get(user=user)
+        self.assertIsNotNone(activity.last_seen_at)
+
+    def test_user_admin_lists_last_site_visit(self):
+        staff = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="password-123",
+        )
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("admin:auth_user_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Last site visit")

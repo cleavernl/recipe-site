@@ -3,12 +3,41 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.contrib import admin, messages
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
 
-from accounts.models import InviteCode, InviteRedemption, generate_invite_code
+from accounts.models import InviteCode, InviteRedemption, UserSiteActivity, generate_invite_code
+
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    list_display = (*BaseUserAdmin.list_display, "last_site_visit")
+    readonly_fields = (*BaseUserAdmin.readonly_fields, "last_site_visit")
+    fieldsets = (
+        *BaseUserAdmin.fieldsets,
+        ("Site usage", {"fields": ("last_site_visit",)}),
+    )
+
+    @admin.display(description="Last site visit", ordering="site_activity__last_seen_at")
+    def last_site_visit(self, obj):
+        if not obj.pk:
+            return "—"
+        try:
+            activity = obj.site_activity
+        except UserSiteActivity.DoesNotExist:
+            return "—"
+        if activity.last_seen_at:
+            return activity.last_seen_at
+        return "—"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("site_activity")
 
 
 @admin.register(InviteCode)

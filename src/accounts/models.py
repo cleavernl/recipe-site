@@ -4,13 +4,34 @@ import secrets
 import string
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.utils import timezone
+
+User = get_user_model()
 
 
 def generate_invite_code(length: int = 12) -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+class UserSiteActivity(models.Model):
+    """Last authenticated activity on the app (not necessarily every HTTP request)."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="site_activity",
+    )
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "user site activity"
+        verbose_name_plural = "user site activities"
+
+    def __str__(self) -> str:
+        return f"Activity for {self.user}"
 
 
 class InviteCode(models.Model):
