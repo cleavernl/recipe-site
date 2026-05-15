@@ -7,9 +7,9 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
-from django.test.utils import override_settings
 
 from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto
 from recipes.views import purge_expired_deleted_recipes
@@ -53,6 +53,24 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertContains(response, 'id="top"')
         self.assertContains(response, 'href="#top"')
+
+    def test_recipe_list_has_no_search_submit_button_and_live_search_hooks(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertNotContains(response, 'type="submit">Search<')
+        self.assertContains(response, "data-recipe-list-search")
+        self.assertContains(response, "data-recipe-list-dynamic")
+
+    def test_recipe_list_partial_returns_results_only(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"), {"partial": "1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "recipe-grid")
+        self.assertNotContains(response, "Friends and family cookbook")
 
     def test_authenticated_user_can_create_recipe(self):
         self.client.force_login(self.other_user)

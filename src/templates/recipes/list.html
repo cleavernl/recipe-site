@@ -12,52 +12,16 @@
     <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
   </section>
 
-  <form class="search" method="get" autocomplete="off">
+  <form class="search" method="get" autocomplete="off" data-recipe-list-search>
     <div>
       <label for="q">Search recipes</label>
       <input id="q" type="search" name="q" value="{{ query }}" placeholder="Search title, notes, or ingredients" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <button type="submit">Search</button>
   </form>
 
-  <section class="recipe-grid">
-    {% for recipe in recipes %}
-      {% include "recipes/_recipe_card.html" %}
-    {% empty %}
-      <div class="empty-state">
-        <h2>No recipes yet</h2>
-        <p>Add the first family favorite to start building the cookbook.</p>
-        <a class="button" href="{% url 'recipes:create' %}">Add the first recipe</a>
-      </div>
-    {% endfor %}
-  </section>
-
-  {% if deleted_recipes %}
-    <section class="recently-deleted-inline">
-      <div class="section-divider">
-        <span></span>
-        <h2>Recently deleted</h2>
-        <span></span>
-      </div>
-      <div class="recipe-grid">
-        {% for recipe in deleted_recipes %}
-          {% include "recipes/_recipe_card.html" %}
-        {% endfor %}
-      </div>
-    </section>
-  {% endif %}
-
-  {% if is_paginated %}
-    <nav class="pagination" aria-label="Recipe pages">
-      {% if page_obj.has_previous %}
-        <a href="?q={{ query }}&page={{ page_obj.previous_page_number }}">Previous</a>
-      {% endif %}
-      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      {% if page_obj.has_next %}
-        <a href="?q={{ query }}&page={{ page_obj.next_page_number }}">Next</a>
-      {% endif %}
-    </nav>
-  {% endif %}
+  <div data-recipe-list-dynamic aria-live="polite" aria-busy="false">
+    {% include "recipes/_list_results.html" %}
+  </div>
 
   <div class="back-to-top">
     <a class="button secondary" href="#top">Back to top</a>

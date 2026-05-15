@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.response import TemplateResponse
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -118,6 +119,16 @@ class RecipeListView(PrivateRecipeMixin, ListView):
             ).distinct()
         context["deleted_recipes"] = deleted_recipes.order_by("-deleted_at", "title")
         return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.GET.get("partial") == "1":
+            return TemplateResponse(
+                self.request,
+                "recipes/_list_results.html",
+                context,
+                **response_kwargs,
+            )
+        return super().render_to_response(context, **response_kwargs)
 
 
 class RecipeDetailView(PrivateRecipeMixin, DetailView):

@@ -434,10 +434,7 @@ select:focus-visible {
 }
 
 .search {
-  align-items: center;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: block;
 }
 
 .search label {
@@ -449,14 +446,10 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
-.search div {
+.search > div {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-}
-
-.search button {
-  white-space: nowrap;
 }
 
 label {
@@ -1481,7 +1474,7 @@ form p {
   .hero,
   .recipe-header,
   .recipe-header-top,
-  .search div,
+  .search > div,
   .search {
     align-items: stretch;
     flex-direction: column;

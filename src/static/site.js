@@ -371,35 +371,106 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.querySelectorAll("[data-recipe-carousel]").forEach((carousel) => {
-    const slides = Array.from(carousel.querySelectorAll("[data-carousel-slide]"));
-    const prevButton = carousel.querySelector("[data-carousel-prev]");
-    const nextButton = carousel.querySelector("[data-carousel-next]");
-    let index = slides.findIndex((slide) => slide.classList.contains("is-active"));
-    if (index < 0) {
-      index = 0;
-    }
+  const initRecipeCarousels = (root) => {
+    root.querySelectorAll("[data-recipe-carousel]").forEach((carousel) => {
+      const slides = Array.from(carousel.querySelectorAll("[data-carousel-slide]"));
+      const prevButton = carousel.querySelector("[data-carousel-prev]");
+      const nextButton = carousel.querySelector("[data-carousel-next]");
+      let index = slides.findIndex((slide) => slide.classList.contains("is-active"));
+      if (index < 0) {
+        index = 0;
+      }
 
-    const show = (nextIndex) => {
-      slides.forEach((slide, slideIndex) => {
-        slide.classList.toggle("is-active", slideIndex === nextIndex);
+      const show = (nextIndex) => {
+        slides.forEach((slide, slideIndex) => {
+          slide.classList.toggle("is-active", slideIndex === nextIndex);
+        });
+        index = nextIndex;
+      };
+
+      prevButton?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextIndex = (index - 1 + slides.length) % slides.length;
+        show(nextIndex);
       });
-      index = nextIndex;
-    };
+      nextButton?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextIndex = (index + 1) % slides.length;
+        show(nextIndex);
+      });
+    });
+  };
 
-    prevButton?.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const nextIndex = (index - 1 + slides.length) % slides.length;
-      show(nextIndex);
-    });
-    nextButton?.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const nextIndex = (index + 1) % slides.length;
-      show(nextIndex);
-    });
-  });
+  initRecipeCarousels(document);
+
+  const liveSearchForm = document.querySelector("[data-recipe-list-search]");
+  const liveSearchDynamic = document.querySelector("[data-recipe-list-dynamic]");
+  if (liveSearchForm instanceof HTMLFormElement && liveSearchDynamic) {
+    const input = liveSearchForm.querySelector("input[name='q']");
+    if (input instanceof HTMLInputElement) {
+      let debounceId = 0;
+      let abortController = null;
+      let requestSeq = 0;
+
+      const runLiveSearch = async () => {
+        const q = input.value.trim();
+        const params = new URLSearchParams();
+        if (q) {
+          params.set("q", q);
+        }
+        params.set("partial", "1");
+        abortController?.abort();
+        abortController = new AbortController();
+        const seq = ++requestSeq;
+        liveSearchDynamic.setAttribute("aria-busy", "true");
+        try {
+          const response = await fetch(`${window.location.pathname}?${params}`, {
+            credentials: "same-origin",
+            signal: abortController.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const html = await response.text();
+          if (seq !== requestSeq) {
+            return;
+          }
+          liveSearchDynamic.innerHTML = html;
+          initRecipeCarousels(liveSearchDynamic);
+
+          const nextUrl = new URL(window.location.href);
+          if (q) {
+            nextUrl.searchParams.set("q", q);
+          } else {
+            nextUrl.searchParams.delete("q");
+          }
+          nextUrl.searchParams.delete("page");
+          nextUrl.searchParams.delete("partial");
+          const search = nextUrl.searchParams.toString();
+          window.history.replaceState({}, "", `${nextUrl.pathname}${search ? `?${search}` : ""}`);
+        } catch (error) {
+          if (seq !== requestSeq) {
+            return;
+          }
+          if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
+            return;
+          }
+          showToast("Search could not be updated. Try again.", "error");
+        } finally {
+          if (seq === requestSeq) {
+            liveSearchDynamic.setAttribute("aria-busy", "false");
+          }
+        }
+      };
+
+      input.addEventListener("input", () => {
+        window.clearTimeout(debounceId);
+        debounceId = window.setTimeout(runLiveSearch, 280);
+      });
+    }
+  }
 
   const updateStars = (form) => {
     const checked = form.querySelector("input[type='radio']:checked");
