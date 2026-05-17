@@ -12,6 +12,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, Count, Exists, ExpressionWrapper, F, IntegerField, OuterRef, Q
+from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
@@ -211,6 +212,14 @@ def filtered_active_recipe_queryset(search_text: str, tag_slugs: list[str] | Non
     return queryset
 
 
+def _recipe_title_order(*, descending: bool = False):
+    """Case-insensitive title ordering for stable, human-friendly lists."""
+    title = Lower("title")
+    if descending:
+        return title.desc(), "id"
+    return title.asc(), "id"
+
+
 def ordered_recipe_list_queryset(queryset, sort_key: str, sort_dir: str):
     """Apply list ordering; sort_key must be a RECIPE_LIST_SORTS value."""
     if sort_key not in RECIPE_LIST_SORTS:
@@ -218,6 +227,7 @@ def ordered_recipe_list_queryset(queryset, sort_key: str, sort_dir: str):
     if sort_dir not in {"asc", "desc"}:
         sort_dir = DEFAULT_RECIPE_LIST_SORT_DIR.get(sort_key, "asc")
     qs = queryset
+    title_tiebreak = _recipe_title_order()
     if sort_key == SORT_EASE:
         qs = qs.annotate(
             _ease_ing=Count("ingredients", distinct=True),
@@ -229,30 +239,28 @@ def ordered_recipe_list_queryset(queryset, sort_key: str, sort_dir: str):
             )
         )
     if sort_key == SORT_TITLE:
-        if sort_dir == "desc":
-            return qs.order_by("-title", "id")
-        return qs.order_by("title", "id")
+        return qs.order_by(*_recipe_title_order(descending=sort_dir == "desc"))
     if sort_key == SORT_RATING:
         if sort_dir == "asc":
-            return qs.order_by(F("average_rating").asc(nulls_last=True), "title", "id")
-        return qs.order_by(F("average_rating").desc(nulls_last=True), "title", "id")
+            return qs.order_by(F("average_rating").asc(nulls_last=True), *title_tiebreak)
+        return qs.order_by(F("average_rating").desc(nulls_last=True), *title_tiebreak)
     if sort_key == SORT_COOK_TIME:
         if sort_dir == "desc":
-            return qs.order_by(F("cook_time_minutes").desc(nulls_last=True), "title", "id")
-        return qs.order_by(F("cook_time_minutes").asc(nulls_last=True), "title", "id")
+            return qs.order_by(F("cook_time_minutes").desc(nulls_last=True), *title_tiebreak)
+        return qs.order_by(F("cook_time_minutes").asc(nulls_last=True), *title_tiebreak)
     if sort_key == SORT_PREP_TIME:
         if sort_dir == "desc":
-            return qs.order_by(F("prep_time_minutes").desc(nulls_last=True), "title", "id")
-        return qs.order_by(F("prep_time_minutes").asc(nulls_last=True), "title", "id")
+            return qs.order_by(F("prep_time_minutes").desc(nulls_last=True), *title_tiebreak)
+        return qs.order_by(F("prep_time_minutes").asc(nulls_last=True), *title_tiebreak)
     if sort_key == SORT_EASE:
         if sort_dir == "desc":
-            return qs.order_by(F("ease_work").desc(nulls_last=True), "title", "id")
-        return qs.order_by("ease_work", "title", "id")
+            return qs.order_by(F("ease_work").desc(nulls_last=True), *title_tiebreak)
+        return qs.order_by("ease_work", *title_tiebreak)
     if sort_key == SORT_UPDATED:
         if sort_dir == "asc":
-            return qs.order_by("updated_at", "title", "id")
-        return qs.order_by("-updated_at", "title", "id")
-    return qs.order_by("title", "id")
+            return qs.order_by("updated_at", *title_tiebreak)
+        return qs.order_by("-updated_at", *title_tiebreak)
+    return qs.order_by(*title_tiebreak)
 
 
 class RandomRecipeView(PrivateRecipeMixin, View):
@@ -362,7 +370,7 @@ class RecipeListView(PrivateRecipeMixin, ListView):
             deleted_recipes = deleted_recipes.filter(tags__slug=slug)
         if query or tag_slugs:
             deleted_recipes = deleted_recipes.distinct()
-        context["deleted_recipes"] = deleted_recipes.order_by("-deleted_at", "title")
+        context["deleted_recipes"] = deleted_recipes.order_by("-deleted_at", *_recipe_title_order())
         return context
 
     def render_to_response(self, context, **response_kwargs):

@@ -210,6 +210,18 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_recipe_list_sorts_title_case_insensitive(self):
+        self.client.force_login(self.other_user)
+        Recipe.objects.create(owner=self.owner, title="Zebra Cake")
+        Recipe.objects.create(owner=self.owner, title="apple Tart")
+        Recipe.objects.create(owner=self.owner, title="Banana Bread")
+
+        response = self.client.get(reverse("recipes:list"))
+        body = response.content.decode()
+
+        self.assertLess(body.index("apple Tart"), body.index("Banana Bread"))
+        self.assertLess(body.index("Banana Bread"), body.index("Zebra Cake"))
+
     def test_pagination_preserves_sort_query(self):
         self.client.force_login(self.other_user)
         for index in range(24):
