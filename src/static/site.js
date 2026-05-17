@@ -402,6 +402,86 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const readAutogrowMinHeight = (textarea) => {
+    const style = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(style.lineHeight) || 20;
+    const padding =
+      Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+    const border =
+      Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth);
+    const rows = Number.parseInt(textarea.getAttribute("rows") || "2", 10);
+    return Math.ceil(rows * lineHeight + padding + border);
+  };
+
+  const resizeAutogrowTextarea = (textarea) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      return;
+    }
+    textarea.style.height = "auto";
+    const minHeight = Number.parseInt(textarea.dataset.autogrowMinHeight || "", 10);
+    const nextHeight = Math.max(
+      textarea.scrollHeight,
+      Number.isFinite(minHeight) ? minHeight : 0,
+    );
+    textarea.style.height = `${nextHeight}px`;
+  };
+
+  const initAutogrowTextareas = (root = document) => {
+    root.querySelectorAll("textarea[data-autogrow]").forEach((textarea) => {
+      if (!(textarea instanceof HTMLTextAreaElement)) {
+        return;
+      }
+      if (!textarea.dataset.autogrowMinHeight) {
+        textarea.dataset.autogrowMinHeight = String(readAutogrowMinHeight(textarea));
+      }
+      if (textarea.dataset.autogrowBound !== "true") {
+        textarea.dataset.autogrowBound = "true";
+        textarea.addEventListener("input", () => resizeAutogrowTextarea(textarea));
+      }
+      resizeAutogrowTextarea(textarea);
+    });
+  };
+
+  initAutogrowTextareas();
+
+  const updatePhotoPreview = (fileInput) => {
+    if (!(fileInput instanceof HTMLInputElement)) {
+      return;
+    }
+    const row = fileInput.closest("[data-photo-row]");
+    if (!row) {
+      return;
+    }
+    const image = row.querySelector("[data-photo-preview-image]");
+    const placeholder = row.querySelector("[data-photo-placeholder]");
+    const file = fileInput.files?.[0];
+    if (!(image instanceof HTMLImageElement) || !file) {
+      return;
+    }
+    if (image.dataset.objectUrl) {
+      URL.revokeObjectURL(image.dataset.objectUrl);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    image.dataset.objectUrl = objectUrl;
+    image.src = objectUrl;
+    image.hidden = false;
+    placeholder?.setAttribute("hidden", "");
+  };
+
+  const initPhotoEditors = (root = document) => {
+    root.querySelectorAll("[data-photo-row] .photo-editor-file").forEach((input) => {
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+      if (input.dataset.photoEditorBound !== "true") {
+        input.dataset.photoEditorBound = "true";
+        input.addEventListener("change", () => updatePhotoPreview(input));
+      }
+    });
+  };
+
+  initPhotoEditors();
+
   document.querySelectorAll("[data-formset]").forEach((formset) => {
     const rows = formset.querySelector("[data-formset-rows]");
     const template = formset.querySelector("[data-formset-template]");
@@ -473,6 +553,8 @@ document.addEventListener("DOMContentLoaded", () => {
       rows.append(row);
       totalInput.value = String(index + 1);
       syncOrder();
+      initAutogrowTextareas(row);
+      initPhotoEditors(row);
       return row;
     };
 

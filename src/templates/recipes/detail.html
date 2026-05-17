@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load recipe_format %}
 
 {% block title %}{{ recipe.title }} - Family Recipes{% endblock %}
 
@@ -49,7 +50,7 @@
       </div>
       <div>
         <h1>{{ recipe.title }}</h1>
-        {% if recipe.description %}<p class="lede">{{ recipe.description }}</p>{% endif %}
+        {% if recipe.description %}<div class="lede recipe-markdown">{{ recipe.description|recipe_markdown }}</div>{% endif %}
         {% if recipe.tags.all %}
           <div class="tag-overflow recipe-detail-tags-overflow" data-tag-overflow>
             <div class="tag-overflow-main" data-tag-overflow-main>
@@ -136,7 +137,7 @@
         </div>
         <ol class="step-list">
           {% for step in recipe.steps.all %}
-            <li>{{ step.text|linebreaksbr }}</li>
+            <li class="recipe-markdown">{{ step.text|recipe_markdown }}</li>
           {% endfor %}
         </ol>
       </section>
@@ -267,7 +268,7 @@
           data-comment-id="{{ comment.id }}"
         >
           <div class="comment-body">
-            <p>{{ comment.body|linebreaksbr }}</p>
+            <div class="recipe-markdown">{{ comment.body|recipe_markdown }}</div>
           </div>
           <footer class="comment-meta">
             <strong>{{ comment.author_name }}</strong>

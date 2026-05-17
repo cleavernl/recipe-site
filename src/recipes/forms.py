@@ -187,7 +187,7 @@ class RecipeForm(forms.ModelForm):
             "source_url",
         ]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 4}),
+            "description": forms.Textarea(attrs={"rows": 4, "data-autogrow": "true"}),
         }
 
 
@@ -243,7 +243,7 @@ class InstructionStepForm(OptionalOrderMixin, forms.ModelForm):
     class Meta:
         model = InstructionStep
         fields = ("text", "order")
-        widgets = {"text": forms.Textarea(attrs={"rows": 3})}
+        widgets = {"text": forms.Textarea(attrs={"rows": 3, "data-autogrow": "true"})}
 
 
 InstructionStepFormSet = inlineformset_factory(
@@ -262,6 +262,17 @@ class RecipePhotoForm(OptionalOrderMixin, forms.ModelForm):
     class Meta:
         model = RecipePhoto
         fields = ("image", "caption", "order")
+        widgets = {
+            "image": forms.FileInput(
+                attrs={
+                    "accept": "image/*",
+                    "class": "photo-editor-file",
+                },
+            ),
+            "caption": forms.TextInput(
+                attrs={"placeholder": "Caption (optional)", "maxlength": "180"},
+            ),
+        }
 
 
 RecipePhotoFormSet = inlineformset_factory(
@@ -279,7 +290,11 @@ class CommentForm(forms.ModelForm):
         fields = ["body"]
         widgets = {
             "body": forms.Textarea(
-                attrs={"rows": 3, "placeholder": "Share a note or tip..."},
+                attrs={
+                    "rows": 3,
+                    "placeholder": "Share a note or tip...",
+                    "data-autogrow": "true",
+                },
             )
         }
 

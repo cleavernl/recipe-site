@@ -5,8 +5,10 @@ description = "A private recipe sharing site for friends and family."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "bleach>=6.3.0",
     "django>=5.0,<6.0",
     "gunicorn>=22.0",
+    "markdown>=3.10.2",
     "pillow>=10.0",
     "whitenoise>=6.6",
 ]

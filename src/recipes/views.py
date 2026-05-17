@@ -33,6 +33,7 @@ from recipes.forms import (
     similar_tag_pairs_for_names,
 )
 from recipes.models import Rating, Recipe, Tag, sync_recipe_tags
+from recipes.photo_sync import sync_legacy_recipe_photo_to_gallery
 
 
 class PrivateRecipeMixin(LoginRequiredMixin):
@@ -454,6 +455,8 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
 
     def get_forms(self):
         recipe = self.get_recipe()
+        if recipe.pk:
+            sync_legacy_recipe_photo_to_gallery(recipe)
         if self.request.method == "POST":
             recipe_form = RecipeForm(self.request.POST, self.request.FILES, instance=recipe)
             ingredient_formset = IngredientFormSet(

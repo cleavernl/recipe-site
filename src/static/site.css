@@ -450,6 +450,94 @@ select:focus-visible {
   max-width: 42rem;
 }
 
+.recipe-markdown {
+  line-height: 1.65;
+}
+
+.recipe-markdown > :first-child {
+  margin-top: 0;
+}
+
+.recipe-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.recipe-markdown p {
+  margin: 0 0 0.75rem;
+}
+
+.recipe-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.recipe-markdown ul,
+.recipe-markdown ol {
+  margin: 0.5rem 0 0.75rem;
+  padding-left: 1.35rem;
+}
+
+.recipe-markdown li + li {
+  margin-top: 0.35rem;
+}
+
+.recipe-markdown a {
+  color: var(--accent-dark);
+  text-underline-offset: 0.16em;
+}
+
+.recipe-markdown a:hover {
+  color: var(--accent);
+}
+
+.recipe-markdown code {
+  background: var(--card-muted);
+  border-radius: 0.35rem;
+  font-size: 0.92em;
+  padding: 0.1em 0.35em;
+}
+
+.recipe-markdown pre {
+  background: var(--card-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  padding: 0.85rem 1rem;
+}
+
+.recipe-markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.recipe-markdown blockquote {
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+  margin: 0.75rem 0;
+  padding-left: 1rem;
+}
+
+.recipe-markdown h3,
+.recipe-markdown h4 {
+  color: var(--ink);
+  font-family: system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 1rem 0 0.5rem;
+}
+
+.recipe-markdown h3 {
+  font-size: 1.15rem;
+}
+
+.recipe-markdown h4 {
+  font-size: 1.05rem;
+}
+
+.step-list li.recipe-markdown > p {
+  margin: 0;
+}
+
 .search-panel,
 .narrow-card,
 .wide-card,
@@ -1171,6 +1259,11 @@ textarea {
   resize: vertical;
 }
 
+textarea[data-autogrow] {
+  overflow-y: hidden;
+  resize: none;
+}
+
 form p {
   margin: 1rem 0;
 }
@@ -1564,7 +1657,7 @@ form p {
   align-items: start;
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: minmax(0, 1.35fr) minmax(14rem, 0.65fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(14rem, 0.45fr);
   margin-top: 0.25rem;
 }
 
@@ -1680,8 +1773,16 @@ form p {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.photo-columns {
-  grid-template-columns: minmax(14rem, 1fr) minmax(14rem, 1fr) auto;
+.photo-formset-rows {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.photo-formset-rows .form-row.photo-row {
+  border-bottom: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .tag-columns {
@@ -1743,8 +1844,126 @@ form p {
 }
 
 .photo-row-grid {
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.photo-editor {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.photo-editor-preview-shell {
+  position: relative;
+}
+
+.photo-editor-preview {
+  aspect-ratio: 5 / 4;
+  min-height: 9.5rem;
+  background: var(--card-muted);
+  border: 1px dashed color-mix(in srgb, var(--border) 88%, var(--muted));
+  border-radius: 18px;
+  cursor: pointer;
+  display: block;
+  overflow: hidden;
+  position: relative;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.photo-editor-preview:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.photo-editor-image {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.photo-editor-image[hidden] {
+  display: none;
+}
+
+.photo-editor-placeholder {
   align-items: center;
-  grid-template-columns: minmax(14rem, 1fr) minmax(14rem, 1fr) auto;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.88rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  height: 100%;
+  inset: 0;
+  justify-content: center;
+  padding: 0.75rem;
+  position: absolute;
+  text-align: center;
+  width: 100%;
+}
+
+.photo-editor-placeholder[hidden] {
+  display: none;
+}
+
+.photo-editor-placeholder-icon {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent-dark);
+  display: inline-flex;
+  font-size: 1.35rem;
+  font-weight: 900;
+  height: 2.25rem;
+  justify-content: center;
+  line-height: 1;
+  width: 2.25rem;
+}
+
+.photo-editor-file {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.photo-editor-remove {
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
+  border: 0;
+  box-shadow: 0 2px 10px rgba(31, 41, 51, 0.18);
+  color: #fff;
+  height: 1.85rem;
+  margin: 0;
+  min-width: 1.85rem;
+  position: absolute;
+  right: 0.45rem;
+  top: 0.45rem;
+  width: 1.85rem;
+  z-index: 2;
+}
+
+.photo-editor-remove:hover {
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: #fff;
+  transform: scale(1.04);
+}
+
+.photo-editor-caption input {
+  font-size: 0.92rem;
+  padding: 0.62rem 0.75rem;
+}
+
+.photo-editor-errors {
+  margin: 0;
 }
 
 .step-row-grid {

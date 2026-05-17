@@ -564,6 +564,35 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_legacy_recipe_photo_syncs_to_gallery_on_edit(self):
+        self.recipe.photo.save(
+            "legacy-hero.jpg",
+            SimpleUploadedFile("legacy-hero.jpg", b"legacy-image", content_type="image/jpeg"),
+            save=True,
+        )
+        self.assertFalse(self.recipe.photos.exists())
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("recipes:update", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "photo-editor-image")
+        self.recipe.refresh_from_db()
+        self.assertEqual(self.recipe.photos.count(), 1)
+        self.assertEqual(self.recipe.photos.get().image.name, self.recipe.photo.name)
+
+    def test_recipe_edit_shows_photo_preview(self):
+        RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile("gallery.jpg", b"fake-image", content_type="image/jpeg"),
+            order=1,
+        )
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("recipes:update", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "photo-editor-image")
+        self.assertContains(response, "photo-editor-preview")
+        self.assertNotContains(response, "Currently:")
+
     def test_edit_recipe_shows_single_extra_rows_for_existing_items(self):
         self.client.force_login(self.owner)
         brunch = Tag.objects.create(name="Brunch", slug="brunch")
@@ -673,6 +702,22 @@ class RecipeWorkflowTests(TestCase):
             list(self.recipe.ingredients.values_list("name", flat=True)),
             ["flour", "sugar"],
         )
+
+    def test_recipe_detail_renders_markdown_in_description_and_steps(self):
+        self.recipe.description = "**Bold** intro\n\nSecond paragraph"
+        self.recipe.save(update_fields=["description"])
+        step = self.recipe.steps.get()
+        step.text = "Heat pan\n\n- flip once\n- serve hot"
+        step.save(update_fields=["text"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "recipe-markdown")
+        self.assertContains(response, "<strong>Bold</strong>")
+        self.assertContains(response, "Second paragraph")
+        self.assertContains(response, "<li>flip once</li>")
+        self.assertContains(response, "serve hot")
 
     def test_recipe_detail_renders_star_rating_form(self):
         Ingredient.objects.create(

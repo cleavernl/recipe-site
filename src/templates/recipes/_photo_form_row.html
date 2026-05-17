@@ -1,0 +1,51 @@
+<div class="form-row photo-row" data-form-row data-photo-row>
+  {{ form.id }}
+  {{ form.order.as_hidden }}
+  {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
+  <div class="form-row-grid photo-row-grid">
+    {{ form.non_field_errors }}
+    <div class="photo-editor">
+      <div class="photo-editor-preview-shell">
+        <label class="photo-editor-preview" for="{{ form.image.id_for_label }}">
+          {% if form.instance.image.name %}
+            <img
+              class="photo-editor-image"
+              src="{{ form.instance.image.url }}"
+              alt=""
+              data-photo-preview-image
+            >
+          {% else %}
+            <img class="photo-editor-image" src="" alt="" data-photo-preview-image hidden>
+          {% endif %}
+          <span
+            class="photo-editor-placeholder"
+            data-photo-placeholder
+            {% if form.instance.image.name %}hidden{% endif %}
+          >
+            <span class="photo-editor-placeholder-icon" aria-hidden="true">+</span>
+            <span>Add photo</span>
+          </span>
+        </label>
+        {{ form.image }}
+        <button
+          type="button"
+          class="icon-button remove-row-button photo-editor-remove"
+          data-remove-row
+          aria-label="Remove photo"
+        >×</button>
+      </div>
+      {% if form.image.errors %}
+        <ul class="errorlist photo-editor-errors">
+          {% for error in form.image.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <div class="photo-editor-caption">
+        <label class="sr-only" for="{{ form.caption.id_for_label }}">Caption</label>
+        {{ form.caption }}
+        {{ form.caption.errors }}
+      </div>
+    </div>
+  </div>
+</div>

@@ -74,51 +74,13 @@
         </div>
         <p class="formset-help">Add more photos for the gallery on the recipe page.</p>
         {{ photo_formset.management_form }}
-        <div class="formset-columns photo-columns" aria-hidden="true">
-          <span>Image</span>
-          <span>Caption</span>
-          <span></span>
-        </div>
-        <div class="formset-rows" data-formset-rows>
+        <div class="formset-rows photo-formset-rows" data-formset-rows>
           {% for form in photo_formset %}
-          <div class="form-row photo-row" data-form-row>
-            {{ form.id }}
-            {{ form.order.as_hidden }}
-            {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
-            <div class="form-row-grid photo-row-grid">
-              {{ form.non_field_errors }}
-              <div>
-                <label class="sr-only" for="{{ form.image.id_for_label }}">Image</label>
-                {{ form.image }}
-                {{ form.image.errors }}
-              </div>
-              <div>
-                <label class="sr-only" for="{{ form.caption.id_for_label }}">Caption</label>
-                {{ form.caption }}
-                {{ form.caption.errors }}
-              </div>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove photo">×</button>
-            </div>
-          </div>
+            {% include "recipes/_photo_form_row.html" with form=form %}
           {% endfor %}
         </div>
         <template data-formset-template>
-          <div class="form-row photo-row" data-form-row>
-            {{ photo_formset.empty_form.id }}
-            {{ photo_formset.empty_form.order.as_hidden }}
-            {% if photo_formset.empty_form.DELETE %}{{ photo_formset.empty_form.DELETE.as_hidden }}{% endif %}
-            <div class="form-row-grid photo-row-grid">
-              <div>
-                <label class="sr-only" for="{{ photo_formset.empty_form.image.id_for_label }}">Image</label>
-                {{ photo_formset.empty_form.image }}
-              </div>
-              <div>
-                <label class="sr-only" for="{{ photo_formset.empty_form.caption.id_for_label }}">Caption</label>
-                {{ photo_formset.empty_form.caption }}
-              </div>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove photo">×</button>
-            </div>
-          </div>
+          {% include "recipes/_photo_form_row.html" with form=photo_formset.empty_form %}
         </template>
       </section>
         </div>
