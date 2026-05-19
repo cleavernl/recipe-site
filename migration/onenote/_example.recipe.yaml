@@ -1,0 +1,32 @@
+# One recipe file for import (management command TBD).
+# Filename: slug-from-title.recipe.yaml
+
+title: Example recipe title
+description: |
+  Optional intro or notes (Markdown OK).
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags: []
+# Tags: crockpot (slow cooker), side, prep, dessert, plus meal types (soup, pasta, etc.).
+# Omit method hints like "(Crockpot)" or "(one pan)" from titles; use tags/description instead.
+
+ingredients:
+  - quantity: "2 cups"
+    name: flour
+    notes: ""
+  - quantity: ""
+    name: salt
+    notes: "to taste"
+
+steps:
+  - Mix dry ingredients.
+  - Bake until done.
+
+photos: []
+# Paths are relative to migration/onenote/recipes/
+# Drop images in ~/Downloads before pasting; they are moved to recipes/images/
+# photos:
+#   - path: images/chicken-parmesan-1.jpg
+#     caption: ""

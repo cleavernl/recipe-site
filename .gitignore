@@ -14,3 +14,8 @@ staticfiles/
 
 *.sqlite3
 *.log
+
+# OneNote migration drafts (personal recipe content)
+migration/onenote/recipes/*.yaml
+migration/onenote/recipes/*.yml
+migration/onenote/recipes/images/
