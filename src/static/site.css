@@ -2356,21 +2356,22 @@ form p {
   padding: 1rem;
 }
 
-.pagination {
-  align-items: center;
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 2rem;
+.recipe-list-sentinel {
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  width: 100%;
 }
 
-.pagination a {
-  background: var(--accent-soft);
-  border-radius: 999px;
-  color: var(--accent-dark);
-  font-weight: 800;
-  padding: 0.55rem 0.9rem;
-  text-decoration: none;
+.recipe-list-load-status {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin: 1.25rem 0 0.5rem;
+  text-align: center;
+}
+
+.recipe-list-load-status[hidden] {
+  display: none;
 }
 
 .back-to-top {

@@ -1070,6 +1070,133 @@ document.addEventListener("DOMContentLoaded", () => {
         initTagOverflow(liveSearchForm);
       };
 
+      let appendAbortController = null;
+      let appendRequestSeq = 0;
+      let appendInFlight = false;
+      let appendObserver = null;
+
+      const teardownInfiniteScroll = () => {
+        appendObserver?.disconnect();
+        appendObserver = null;
+      };
+
+      const buildListFetchParams = () => {
+        const params = new URLSearchParams();
+        const q = input.value.trim();
+        if (q) {
+          params.set("q", q);
+        }
+        applySortToParams(params);
+        return params;
+      };
+
+      const setLoadStatusVisible = (visible) => {
+        const status = liveSearchDynamic.querySelector("[data-recipe-list-load-status]");
+        if (!(status instanceof HTMLElement)) {
+          return;
+        }
+        if (visible) {
+          status.removeAttribute("hidden");
+        } else {
+          status.setAttribute("hidden", "");
+        }
+      };
+
+      const mergeAppendFragment = (html) => {
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const chunk = parsed.querySelector("[data-recipe-list-append-chunk]");
+        const grid = liveSearchDynamic.querySelector("[data-recipe-list-grid]");
+        if (chunk instanceof HTMLElement && grid instanceof HTMLElement) {
+          while (chunk.firstChild) {
+            grid.append(chunk.firstChild);
+          }
+        }
+        liveSearchDynamic
+          .querySelectorAll("[data-recipe-list-sentinel], [data-recipe-list-load-status]")
+          .forEach((el) => {
+            el.remove();
+          });
+        const loadStatus = parsed.querySelector("[data-recipe-list-load-status]");
+        const sentinel = parsed.querySelector("[data-recipe-list-sentinel]");
+        if (loadStatus instanceof HTMLElement) {
+          liveSearchDynamic.append(loadStatus);
+        }
+        if (sentinel instanceof HTMLElement) {
+          liveSearchDynamic.append(sentinel);
+        }
+        initRecipeCarousels(liveSearchDynamic);
+        initTagOverflow(liveSearchDynamic);
+        return Boolean(sentinel);
+      };
+
+      const loadNextRecipePage = async () => {
+        const sentinel = liveSearchDynamic.querySelector("[data-recipe-list-sentinel]");
+        if (!(sentinel instanceof HTMLElement) || appendInFlight) {
+          return;
+        }
+        const nextPage = sentinel.dataset.nextPage || "";
+        if (!nextPage) {
+          return;
+        }
+        appendInFlight = true;
+        setLoadStatusVisible(true);
+        appendAbortController?.abort();
+        appendAbortController = new AbortController();
+        const seq = ++appendRequestSeq;
+        const params = buildListFetchParams();
+        params.set("partial", "append");
+        params.set("page", nextPage);
+        try {
+          const response = await fetch(`${window.location.pathname}?${params}`, {
+            credentials: "same-origin",
+            signal: appendAbortController.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const html = await response.text();
+          if (seq !== appendRequestSeq) {
+            return;
+          }
+          const hasMore = mergeAppendFragment(html);
+          teardownInfiniteScroll();
+          if (hasMore) {
+            observeRecipeListSentinel();
+          }
+        } catch (error) {
+          if (seq !== appendRequestSeq) {
+            return;
+          }
+          if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
+            return;
+          }
+          showToast("Could not load more recipes. Try again.", "error");
+        } finally {
+          if (seq === appendRequestSeq) {
+            appendInFlight = false;
+            setLoadStatusVisible(false);
+          }
+        }
+      };
+
+      const observeRecipeListSentinel = () => {
+        teardownInfiniteScroll();
+        const sentinel = liveSearchDynamic.querySelector("[data-recipe-list-sentinel]");
+        if (!(sentinel instanceof HTMLElement)) {
+          return;
+        }
+        appendObserver = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) {
+              return;
+            }
+            void loadNextRecipePage();
+          },
+          { root: null, rootMargin: "240px 0px 0px", threshold: 0 },
+        );
+        appendObserver.observe(sentinel);
+      };
+
       const runLiveSearch = async () => {
         const q = input.value.trim();
         const params = new URLSearchParams();
@@ -1078,6 +1205,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         applySortToParams(params);
         params.set("partial", "1");
+        appendRequestSeq += 1;
+        appendAbortController?.abort();
+        teardownInfiniteScroll();
         abortController?.abort();
         abortController = new AbortController();
         const seq = ++requestSeq;
@@ -1098,6 +1228,7 @@ document.addEventListener("DOMContentLoaded", () => {
           syncTagFiltersFromPartialHtml(html);
           initRecipeCarousels(liveSearchDynamic);
           initTagOverflow(liveSearchDynamic);
+          observeRecipeListSentinel();
 
           const nextUrl = new URL(window.location.href);
           if (q) {
@@ -1307,6 +1438,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       syncRandomPickHref();
+      observeRecipeListSentinel();
     }
   }
 

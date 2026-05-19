@@ -212,6 +212,31 @@ def filtered_active_recipe_queryset(search_text: str, tag_slugs: list[str] | Non
     return queryset
 
 
+def filter_tags_for_recipe_list(search_text: str, tag_slugs: list[str]) -> list[Tag]:
+    """Tags on recipes matching list filters, with counts across the full result set."""
+    filtered = filtered_active_recipe_queryset(search_text, tag_slugs)
+    tag_counts: Counter[int] = Counter(
+        Recipe.tags.through.objects.filter(
+            recipe_id__in=filtered.values("pk"),
+        ).values_list("tag_id", flat=True),
+    )
+    if not tag_counts:
+        return []
+    tags_by_id = {
+        t.pk: t
+        for t in Tag.objects.filter(pk__in=tag_counts.keys()).only("pk", "name", "slug")
+    }
+    filter_tags: list[Tag] = []
+    for tag_id, recipe_count in tag_counts.items():
+        tag_obj = tags_by_id.get(tag_id)
+        if tag_obj is None:
+            continue
+        tag_obj.recipe_count = recipe_count
+        filter_tags.append(tag_obj)
+    filter_tags.sort(key=lambda t: (-t.recipe_count, t.name.lower()))
+    return filter_tags
+
+
 def _recipe_title_order(*, descending: bool = False):
     """Case-insensitive title ordering for stable, human-friendly lists."""
     title = Lower("title")
@@ -325,33 +350,7 @@ class RecipeListView(PrivateRecipeMixin, ListView):
             sort,
             RECIPE_LIST_SORT_LABELS[SORT_TITLE],
         )
-        page_obj = context.get("page_obj")
-        if page_obj is not None:
-            page_recipes = list(page_obj.object_list)
-        else:
-            page_recipes = list(context["object_list"])
-
-        tag_counts: Counter[int] = Counter()
-        for recipe in page_recipes:
-            for tag in recipe.tags.all():
-                tag_counts[tag.id] += 1
-
-        if not tag_counts:
-            context["filter_tags"] = []
-        else:
-            tags_by_id = {
-                t.pk: t
-                for t in Tag.objects.filter(pk__in=tag_counts.keys()).only("pk", "name", "slug")
-            }
-            filter_tags: list[Tag] = []
-            for tag_id, recipe_count in tag_counts.items():
-                tag_obj = tags_by_id.get(tag_id)
-                if tag_obj is None:
-                    continue
-                tag_obj.recipe_count = recipe_count
-                filter_tags.append(tag_obj)
-            filter_tags.sort(key=lambda t: (-t.recipe_count, t.name.lower()))
-            context["filter_tags"] = filter_tags
+        context["filter_tags"] = filter_tags_for_recipe_list(query, tag_slugs)
         deleted_recipes = (
             current_recipes()
             .filter(deleted_at__isnull=False)
@@ -374,7 +373,15 @@ class RecipeListView(PrivateRecipeMixin, ListView):
         return context
 
     def render_to_response(self, context, **response_kwargs):
-        if self.request.GET.get("partial") == "1":
+        partial = self.request.GET.get("partial", "").strip()
+        if partial == "append":
+            return TemplateResponse(
+                self.request,
+                "recipes/_list_cards.html",
+                context,
+                **response_kwargs,
+            )
+        if partial == "1":
             return TemplateResponse(
                 self.request,
                 "recipes/_list_results.html",

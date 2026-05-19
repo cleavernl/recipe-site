@@ -147,6 +147,40 @@ class RecipeWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "recipe-grid")
         self.assertNotContains(response, "Friends and family cookbook")
+        self.assertNotContains(response, 'aria-label="Recipe pages"')
+
+    def test_recipe_list_shows_infinite_scroll_sentinel_when_more_pages(self):
+        self.client.force_login(self.other_user)
+        with patch.object(RecipeListView, "paginate_by", 2):
+            for index in range(3):
+                Recipe.objects.create(
+                    owner=self.owner,
+                    title=f"Scroll Recipe {index}",
+                    description="",
+                )
+            response = self.client.get(reverse("recipes:list"))
+        self.assertContains(response, "data-recipe-list-sentinel")
+        self.assertContains(response, 'data-next-page="2"')
+        self.assertNotContains(response, 'aria-label="Recipe pages"')
+
+    def test_recipe_list_partial_append_returns_next_cards_only(self):
+        self.client.force_login(self.other_user)
+        with patch.object(RecipeListView, "paginate_by", 2):
+            for index in range(3):
+                Recipe.objects.create(
+                    owner=self.owner,
+                    title=f"Append Recipe {index}",
+                    description="",
+                )
+            response = self.client.get(
+                reverse("recipes:list"),
+                {"partial": "append", "page": "2"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-recipe-list-append-chunk")
+        self.assertContains(response, "Append Recipe 2")
+        self.assertNotContains(response, "data-recipe-list-sync-extras")
+        self.assertNotContains(response, "Friends and family cookbook")
 
     def test_recipe_list_sorts_by_rating_high_first(self):
         self.client.force_login(self.other_user)
@@ -222,16 +256,17 @@ class RecipeWorkflowTests(TestCase):
         self.assertLess(body.index("apple Tart"), body.index("Banana Bread"))
         self.assertLess(body.index("Banana Bread"), body.index("Zebra Cake"))
 
-    def test_pagination_preserves_sort_query(self):
+    def test_infinite_scroll_preserves_sort_in_search_form(self):
         self.client.force_login(self.other_user)
         for index in range(24):
             Recipe.objects.create(owner=self.owner, title=f"Bulk Recipe {index:02d}")
 
         response = self.client.get(reverse("recipes:list"), {"sort": "rating"})
 
-        self.assertContains(response, "sort=rating")
+        self.assertContains(response, 'name="sort" value="rating"')
+        self.assertContains(response, "data-recipe-list-sentinel")
 
-    def test_pagination_preserves_sort_dir_when_non_default(self):
+    def test_infinite_scroll_preserves_sort_dir_in_search_form(self):
         self.client.force_login(self.other_user)
         for index in range(24):
             Recipe.objects.create(owner=self.owner, title=f"Bulk Recipe {index:02d}")
@@ -241,8 +276,8 @@ class RecipeWorkflowTests(TestCase):
             {"sort": "rating", "sort_dir": "asc"},
         )
 
-        self.assertContains(response, "sort=rating")
-        self.assertContains(response, "sort_dir=asc")
+        self.assertContains(response, 'name="sort" value="rating"')
+        self.assertContains(response, 'name="sort_dir" value="asc"')
 
     def test_sync_recipe_tags_sets_many_to_many(self):
         recipe = Recipe.objects.create(owner=self.owner, title="Tagged Dish")
@@ -440,7 +475,7 @@ class RecipeWorkflowTests(TestCase):
         self.assertIn('data-tag-slug="on-match"', body)
         self.assertNotIn('data-tag-slug="not-on-match"', body)
 
-    def test_recipe_list_tag_chip_counts_reflect_current_page_only(self):
+    def test_recipe_list_tag_chip_counts_reflect_full_filtered_set_not_page(self):
         self.client.force_login(self.other_user)
         bulk = Tag.objects.create(name="Bulk", slug="bulk-tag")
         with patch.object(RecipeListView, "paginate_by", 2):
@@ -451,20 +486,15 @@ class RecipeWorkflowTests(TestCase):
                     description="",
                 )
                 r.tags.add(bulk)
-            response1 = self.client.get(reverse("recipes:list"), {"page": "1"})
-            body1 = response1.content.decode()
-            idx1 = body1.index('data-tag-slug="bulk-tag"')
-            self.assertRegex(
-                body1[idx1 : idx1 + 400],
-                r'<span class="search-tag-chip-count">\s*\(1\)\s*</span>',
-            )
-            response2 = self.client.get(reverse("recipes:list"), {"page": "2"})
-            body2 = response2.content.decode()
-            idx2 = body2.index('data-tag-slug="bulk-tag"')
-            self.assertRegex(
-                body2[idx2 : idx2 + 400],
-                r'<span class="search-tag-chip-count">\s*\(2\)\s*</span>',
-            )
+            for page in ("1", "2"):
+                response = self.client.get(reverse("recipes:list"), {"page": page})
+                body = response.content.decode()
+                idx = body.index('data-tag-slug="bulk-tag"')
+                self.assertRegex(
+                    body[idx : idx + 400],
+                    r'<span class="search-tag-chip-count">\s*\(3\)\s*</span>',
+                    msg=f"page {page} should show total filtered count, not page slice",
+                )
 
     def test_recipe_list_filter_two_tags_requires_both(self):
         self.client.force_login(self.other_user)

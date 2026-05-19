@@ -1,17 +1,30 @@
 <div hidden class="recipe-list-sync-extras" aria-hidden="true" data-recipe-list-sync-extras>
   {% include "recipes/_search_tag_filters.html" %}
 </div>
-<section class="recipe-grid">
-  {% for recipe in recipes %}
-    {% include "recipes/_recipe_card.html" %}
-  {% empty %}
+{% if recipes %}
+  <section class="recipe-grid" data-recipe-list-grid>
+    {% for recipe in recipes %}
+      {% include "recipes/_recipe_card.html" %}
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="recipe-grid" data-recipe-list-grid>
     <div class="empty-state">
       <h2>No recipes yet</h2>
       <p>Add the first family favorite to start building the cookbook.</p>
       <a class="button" href="{% url 'recipes:create' %}">Add the first recipe</a>
     </div>
-  {% endfor %}
-</section>
+  </section>
+{% endif %}
+{% if is_paginated and page_obj.has_next %}
+  <p class="recipe-list-load-status" data-recipe-list-load-status hidden>Loading more recipes…</p>
+  <div
+    class="recipe-list-sentinel"
+    data-recipe-list-sentinel
+    data-next-page="{{ page_obj.next_page_number }}"
+    aria-hidden="true"
+  ></div>
+{% endif %}
 
 {% if deleted_recipes %}
   <section class="recently-deleted-inline">
@@ -20,22 +33,10 @@
       <h2>Recently deleted</h2>
       <span></span>
     </div>
-    <div class="recipe-grid">
+    <section class="recipe-grid">
       {% for recipe in deleted_recipes %}
         {% include "recipes/_recipe_card.html" %}
       {% endfor %}
-    </div>
+    </section>
   </section>
-{% endif %}
-
-{% if is_paginated %}
-  <nav class="pagination" aria-label="Recipe pages">
-    {% if page_obj.has_previous %}
-      <a href="?{% if list_query_no_page %}{{ list_query_no_page }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
-    {% endif %}
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-      <a href="?{% if list_query_no_page %}{{ list_query_no_page }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
-    {% endif %}
-  </nav>
 {% endif %}
