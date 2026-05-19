@@ -1,0 +1,59 @@
+title: Chicken and Mushroom Soup
+description: ""
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - soup
+  - chicken
+  - dinner
+
+ingredients:
+  - quantity: "1"
+    name: rotisserie chicken
+    notes: shredded, or use shredded cooked chicken
+  - quantity: "8 cups"
+    name: chicken broth
+    notes: ""
+  - quantity: "1 cup"
+    name: mushrooms
+    notes: sliced; a whole package works well
+  - quantity: "1"
+    name: onion
+    notes: chopped
+  - quantity: "2 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "2"
+    name: carrots
+    notes: sliced
+  - quantity: "2"
+    name: celery stalks
+    notes: sliced
+  - quantity: "1 tsp."
+    name: thyme
+    notes: ""
+  - quantity: "1"
+    name: spinach
+    notes: or kale; one package
+  - quantity: ""
+    name: salt and pepper
+    notes: to taste
+  - quantity: "2 cups"
+    name: egg noodles
+    notes: optional
+  - quantity: ""
+    name: fresh parsley or chives
+    notes: optional garnish
+
+steps:
+  - Heat a large pot over medium heat. Add onion, garlic, carrots, and celery. Sauté until softened. Add mushrooms and cook until browned.
+  - Pour in chicken broth and bring to a boil, then reduce heat.
+  - Stir in shredded chicken, thyme, salt, and pepper.
+  - If using egg noodles, add and cook until tender. Add spinach at the end and cook until wilted.
+  - Ladle into bowls and serve hot. Garnish with parsley, chives, or other herbs if desired.
+
+photos:
+  - path: images/chicken-and-mushroom-soup-1.png
+    caption: ""

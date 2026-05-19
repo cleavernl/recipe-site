@@ -1,0 +1,61 @@
+title: White Lasagna Soup
+description: |
+  A comforting and creamy soup that combines the flavors of traditional lasagna with the ease of a one-pot meal, perfect for chilly evenings. Optional: add a little tomato sauce for creamy tomato flavor.
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - soup
+  - dinner
+
+ingredients:
+  - quantity: "1 lb"
+    name: Italian sausage
+    notes: ""
+  - quantity: "1"
+    name: onion
+    notes: chopped
+  - quantity: "3 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "6 cups"
+    name: chicken broth
+    notes: ""
+  - quantity: "1 can"
+    name: white beans
+    notes: 15 oz, drained and rinsed
+  - quantity: "1 cup"
+    name: heavy cream
+    notes: ""
+  - quantity: "2 cups"
+    name: spinach
+    notes: chopped
+  - quantity: "1 1/2 cups"
+    name: ricotta cheese
+    notes: ""
+  - quantity: "1 cup"
+    name: mozzarella cheese
+    notes: shredded
+  - quantity: "1/2 cup"
+    name: Parmesan cheese
+    notes: grated
+  - quantity: "8 oz"
+    name: lasagna noodles
+    notes: broken into pieces, or any pasta
+  - quantity: ""
+    name: salt and pepper
+    notes: to taste
+
+steps:
+  - In a large pot or Dutch oven, cook Italian sausage over medium heat until browned, breaking it up with a spoon. Drain excess fat if necessary.
+  - Add chopped onion and minced garlic. Sauté until the onion is translucent and fragrant, about 3–4 minutes.
+  - Pour in chicken broth and add drained white beans. Bring to a simmer.
+  - Lower the heat and stir in heavy cream and chopped spinach. Cook until spinach wilts, about 2–3 minutes.
+  - Stir in ricotta, mozzarella, and Parmesan until melted and well combined.
+  - Add broken lasagna noodles and cook according to package instructions, usually 8–10 minutes, until tender.
+  - Season with salt and pepper to taste. Ladle into bowls and serve.
+
+photos:
+  - path: images/white-lasagna-soup-1.png
+    caption: ""

@@ -1,0 +1,58 @@
+title: Mongolian Beef Noodles
+description: |
+  Mongolian Ground Beef Noodles. Ground chicken or pork can be substituted for the beef.
+prep_time_minutes:
+cook_time_minutes:
+servings: 4
+source_url: ""
+tags:
+  - pasta
+  - beef
+  - dinner
+
+ingredients:
+  - quantity: "1 lb"
+    name: ground beef
+    notes: or ground chicken or pork
+  - quantity: "8 oz"
+    name: noodles
+    notes: lo mein or spaghetti
+  - quantity: "1/4 cup"
+    name: soy sauce
+    notes: ""
+  - quantity: "1/4 cup"
+    name: hoisin sauce
+    notes: ""
+  - quantity: "2 tbsp."
+    name: brown sugar
+    notes: ""
+  - quantity: "1 tsp."
+    name: ginger
+    notes: minced
+  - quantity: "3 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "1 tbsp."
+    name: sesame oil
+    notes: ""
+  - quantity: "1/4 cup"
+    name: green onions
+    notes: chopped
+  - quantity: "1/2 tsp."
+    name: red pepper flakes
+    notes: optional
+  - quantity: ""
+    name: sesame seeds
+    notes: for garnish
+
+steps:
+  - Cook noodles according to package instructions. Drain and set aside.
+  - In a large skillet, heat sesame oil over medium heat. Add ground beef and cook until browned, breaking it up as it cooks. Drain excess fat if necessary.
+  - Add minced garlic, ginger, and optional red pepper flakes. Cook for 1–2 minutes until fragrant.
+  - Stir in soy sauce, hoisin sauce, and brown sugar. Simmer for 3–4 minutes until the sauce thickens slightly.
+  - Toss cooked noodles into the skillet, coating them in the beef and sauce mixture.
+  - Garnish with chopped green onions, red pepper flakes if using, and sesame seeds before serving.
+
+photos:
+  - path: images/mongolian-beef-noodles-1.png
+    caption: ""

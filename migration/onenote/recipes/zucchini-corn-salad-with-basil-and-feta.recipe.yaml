@@ -1,0 +1,51 @@
+title: Zucchini Corn Salad with Basil and Feta
+description: |
+  Add chicken or shrimp for more protein.
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - salad
+  - vegetarian
+  - dinner
+
+ingredients:
+  - quantity: "2"
+    name: medium zucchinis
+    notes: diced
+  - quantity: "1 cup"
+    name: corn kernels
+    notes: fresh or frozen
+  - quantity: "1/4 cup"
+    name: fresh basil
+    notes: chopped
+  - quantity: "1/2 cup"
+    name: feta cheese
+    notes: crumbled
+  - quantity: "2 tbsp."
+    name: olive oil
+    notes: ""
+  - quantity: "1 tbsp."
+    name: lemon juice
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: salt
+    notes: ""
+  - quantity: "1/4 tsp."
+    name: black pepper
+    notes: ""
+
+steps:
+  - In a large bowl, combine diced zucchini and corn kernels.
+  - Add chopped basil and crumbled feta.
+  - In a small bowl, whisk together olive oil, lemon juice, salt, and black pepper.
+  - Pour dressing over the salad and toss gently to combine.
+  - Let sit at least 10 minutes to allow flavors to meld.
+  - Serve chilled or at room temperature.
+
+photos:
+  - path: images/zucchini-corn-salad-with-basil-and-feta-1.png
+    caption: ""
+  - path: images/zucchini-corn-salad-with-basil-and-feta-2.png
+    caption: ""

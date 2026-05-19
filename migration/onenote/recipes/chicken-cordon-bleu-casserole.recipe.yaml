@@ -1,0 +1,61 @@
+title: Chicken Cordon Bleu Casserole
+description: |
+  Creamy chicken cordon bleu casserole with a crunchy topping.
+prep_time_minutes: 15
+cook_time_minutes: 35
+servings:
+source_url: ""
+tags:
+  - chicken
+  - casserole
+  - dinner
+
+ingredients:
+  - quantity: "3 cups"
+    name: cooked chicken
+    notes: shredded
+  - quantity: "8 slices"
+    name: ham
+    notes: chopped
+  - quantity: "1 cup"
+    name: Swiss cheese
+    notes: shredded
+  - quantity: "1 cup"
+    name: cream of chicken soup
+    notes: ""
+  - quantity: "1/2 cup"
+    name: milk
+    notes: ""
+  - quantity: "1 tsp."
+    name: Dijon mustard
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: garlic powder
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: onion powder
+    notes: ""
+  - quantity: "1/4 tsp."
+    name: black pepper
+    notes: ""
+  - quantity: "1 cup"
+    name: breadcrumbs
+    notes: ""
+  - quantity: "2 tbsp."
+    name: butter
+    notes: melted
+  - quantity: ""
+    name: fresh parsley
+    notes: chopped, for garnish
+
+steps:
+  - Preheat oven to 350°F (175°C).
+  - In a large bowl, combine shredded chicken, chopped ham, and Swiss cheese.
+  - In a separate bowl, whisk together cream of chicken soup, milk, Dijon mustard, garlic powder, onion powder, and black pepper until smooth.
+  - Pour soup mixture over chicken and ham; stir until well coated. Transfer to a greased 9×13-inch baking dish and spread evenly.
+  - Mix breadcrumbs with melted butter until coated. Sprinkle over the casserole.
+  - Bake 30–35 minutes, until bubbly and golden on top. Garnish with parsley before serving.
+
+photos:
+  - path: images/chicken-cordon-bleu-casserole-1.png
+    caption: ""

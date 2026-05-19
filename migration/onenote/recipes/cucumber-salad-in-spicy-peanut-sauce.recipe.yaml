@@ -1,0 +1,52 @@
+title: Cucumber Salad in Spicy Peanut Sauce
+description: ""
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - side
+  - salad
+  - vegetarian
+
+ingredients:
+  - quantity: "2"
+    name: large cucumbers
+    notes: sliced into rounds or sticks
+  - quantity: "1/2 cup"
+    name: creamy peanut butter
+    notes: ""
+  - quantity: "2 tbsp."
+    name: soy sauce
+    notes: ""
+  - quantity: "1 tbsp."
+    name: honey
+    notes: ""
+  - quantity: "1 tbsp."
+    name: rice vinegar
+    notes: ""
+  - quantity: "1 tsp."
+    name: sriracha
+    notes: adjust to taste
+  - quantity: "1 clove"
+    name: garlic
+    notes: minced
+  - quantity: "1 tbsp."
+    name: sesame oil
+    notes: ""
+  - quantity: ""
+    name: chopped peanuts
+    notes: for garnish
+  - quantity: ""
+    name: fresh cilantro
+    notes: for garnish
+
+steps:
+  - Slice cucumbers into rounds or sticks.
+  - In a bowl, whisk together peanut butter, soy sauce, honey, rice vinegar, sriracha, minced garlic, and sesame oil until smooth.
+  - Add cucumber slices to the bowl and toss until well coated.
+  - Transfer to a serving dish and sprinkle with chopped peanuts and fresh cilantro.
+
+photos:
+  - path: images/cucumber-salad-in-spicy-peanut-sauce-1.png
+    caption: ""

@@ -1,0 +1,54 @@
+title: Chicken Mushroom Wild Rice Soup
+description: ""
+prep_time_minutes:
+cook_time_minutes: 45
+servings:
+source_url: ""
+tags:
+  - soup
+  - chicken
+  - dinner
+
+ingredients:
+  - quantity: "1 cup"
+    name: wild rice
+    notes: ""
+  - quantity: "1 lb"
+    name: chicken breast
+    notes: diced
+  - quantity: "2 cups"
+    name: mushrooms
+    notes: sliced
+  - quantity: "1"
+    name: onion
+    notes: chopped
+  - quantity: "3 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "4 cups"
+    name: chicken broth
+    notes: ""
+  - quantity: "1 cup"
+    name: heavy cream
+    notes: ""
+  - quantity: "2 tbsp."
+    name: olive oil
+    notes: ""
+  - quantity: "1 tsp."
+    name: thyme
+    notes: ""
+  - quantity: ""
+    name: salt and pepper
+    notes: to taste
+
+steps:
+  - In a large pot, heat olive oil over medium heat. Add onion and garlic; sauté until softened.
+  - Add diced chicken and cook until browned.
+  - Stir in mushrooms and cook 5 minutes more.
+  - Add wild rice, chicken broth, thyme, salt, and pepper; bring to a boil.
+  - Reduce heat and simmer 40–45 minutes until rice is tender.
+  - Stir in heavy cream, heat through, and serve hot.
+
+photos:
+  - path: images/chicken-mushroom-wild-rice-soup-1.png
+    caption: ""

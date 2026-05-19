@@ -1,0 +1,77 @@
+title: Seafood Stuffed Shells
+description: |
+  Creamy, cheesy, and packed with flavor. About 420 kcal per serving (per original notes).
+prep_time_minutes: 20
+cook_time_minutes: 30
+servings: 4
+source_url: ""
+tags:
+  - pasta
+  - seafood
+  - dinner
+
+ingredients:
+  - quantity: "20"
+    name: jumbo pasta shells
+    notes: cooked al dente
+  - quantity: "1 tbsp."
+    name: olive oil
+    notes: ""
+  - quantity: "1/2 lb"
+    name: shrimp
+    notes: peeled, deveined, and chopped
+  - quantity: "1/2 lb"
+    name: lump crab meat
+    notes: ""
+  - quantity: "2 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "1 cup"
+    name: ricotta cheese
+    notes: ""
+  - quantity: "1/2 cup"
+    name: cream cheese
+    notes: softened
+  - quantity: "1/2 cup"
+    name: shredded mozzarella cheese
+    notes: for filling
+  - quantity: "1/4 cup"
+    name: grated Parmesan cheese
+    notes: for filling
+  - quantity: "1"
+    name: egg
+    notes: beaten
+  - quantity: "1 tbsp."
+    name: fresh parsley
+    notes: chopped, plus extra for garnish
+  - quantity: "1 tsp."
+    name: Old Bay seasoning
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: salt
+    notes: ""
+  - quantity: "1/4 tsp."
+    name: black pepper
+    notes: ""
+  - quantity: "1 1/2 cups"
+    name: Alfredo sauce
+    notes: ""
+  - quantity: "1/2 cup"
+    name: shredded mozzarella cheese
+    notes: for topping
+  - quantity: "1/4 cup"
+    name: grated Parmesan cheese
+    notes: for topping
+
+steps:
+  - Preheat oven to 375°F (190°C). Grease a baking dish with olive oil.
+  - In a skillet, heat olive oil and sauté garlic for 1 minute. Add shrimp and cook until pink, about 2 minutes.
+  - In a bowl, mix ricotta, cream cheese, mozzarella, Parmesan, egg, parsley, Old Bay, salt, and black pepper. Fold in crab and shrimp.
+  - Fill each pasta shell with the seafood mixture and arrange in the baking dish.
+  - Pour Alfredo sauce over the shells and sprinkle with mozzarella and Parmesan for topping.
+  - Cover with foil and bake for 20 minutes. Uncover and bake for 10 more minutes until bubbly and golden.
+  - Garnish with fresh parsley and serve warm.
+
+photos:
+  - path: images/seafood-stuffed-shells-1.png
+    caption: ""

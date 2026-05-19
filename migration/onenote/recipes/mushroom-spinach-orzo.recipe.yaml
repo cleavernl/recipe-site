@@ -1,0 +1,56 @@
+title: Mushroom Spinach Orzo
+description: |
+  Add chicken, shrimp, or sausage for more protein. Optional herbs such as thyme or basil add extra flavor.
+prep_time_minutes:
+cook_time_minutes: 12
+servings:
+source_url: ""
+tags:
+  - pasta
+  - vegetarian
+  - dinner
+
+ingredients:
+  - quantity: "1 cup"
+    name: orzo
+    notes: ""
+  - quantity: "2 cups"
+    name: vegetable broth
+    notes: or chicken broth
+  - quantity: "1 tbsp."
+    name: olive oil
+    notes: ""
+  - quantity: "1"
+    name: small onion
+    notes: diced
+  - quantity: "2 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "8 oz"
+    name: mushrooms
+    notes: sliced
+  - quantity: "2 cups"
+    name: fresh spinach
+    notes: ""
+  - quantity: "1 tsp."
+    name: salt
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: black pepper
+    notes: ""
+  - quantity: "1/4 cup"
+    name: grated Parmesan cheese
+    notes: ""
+
+steps:
+  - Heat olive oil in a large skillet over medium heat.
+  - Add diced onion and garlic; sauté until onion is translucent.
+  - Stir in sliced mushrooms; cook until softened.
+  - Add orzo and vegetable broth; bring to a boil.
+  - Reduce heat, cover, and simmer until orzo is tender, about 10–12 minutes.
+  - Add fresh spinach; stir until wilted.
+  - Season with salt and pepper; stir in Parmesan cheese before serving.
+
+photos:
+  - path: images/mushroom-spinach-orzo-1.png
+    caption: ""

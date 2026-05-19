@@ -1,0 +1,53 @@
+title: Rhubarb Cake
+description: |
+  Rhubarb cake with velvety butter sauce.
+prep_time_minutes:
+cook_time_minutes: 45
+servings:
+source_url: ""
+tags:
+  - dessert
+
+ingredients:
+  - quantity: "4 cups"
+    name: all-purpose flour
+    notes: for cake
+  - quantity: "2 cups"
+    name: granulated sugar
+    notes: for cake
+  - quantity: "4 tsp."
+    name: baking powder
+    notes: for cake
+  - quantity: "1/2 tsp."
+    name: salt
+    notes: for cake
+  - quantity: "4 cups"
+    name: rhubarb
+    notes: diced, fresh or frozen
+  - quantity: "2 cups"
+    name: milk
+    notes: for cake
+  - quantity: "6 tbsp."
+    name: butter
+    notes: melted, for cake
+  - quantity: "1/2 cup"
+    name: butter
+    notes: 1 stick, for butter sauce
+  - quantity: "1 cup"
+    name: granulated sugar
+    notes: for butter sauce
+  - quantity: "3/4 cup"
+    name: heavy cream
+    notes: for butter sauce
+
+steps:
+  - Preheat oven to 350°F (175°C).
+  - In a large bowl, whisk together flour, sugar, baking powder, and salt. Add rhubarb, milk, and melted butter; stir gently until just mixed.
+  - Grease a 9×13-inch baking pan. Pour batter evenly into the pan. Bake about 45 minutes, until a toothpick inserted in the center comes out clean.
+  - Remove from oven and cool to room temperature.
+  - For butter sauce, combine butter, sugar, and heavy cream in a saucepan. Heat over medium, stirring constantly. Gently boil about 1 minute until incorporated and slightly thickened. Remove from heat and cool slightly.
+  - Cut cake into slices and drizzle with warm butter sauce. Reheat sauce gently if needed.
+
+photos:
+  - path: images/rhubarb-cake-1.png
+    caption: ""

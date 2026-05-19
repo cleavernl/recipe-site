@@ -1,0 +1,63 @@
+title: Ginger Glazed Chicken Ramen
+description: |
+  About 320 kcal per serving (per original notes).
+prep_time_minutes: 10
+cook_time_minutes: 20
+servings: 4
+source_url: ""
+tags:
+  - soup
+  - chicken
+  - dinner
+
+ingredients:
+  - quantity: "1 lb"
+    name: chicken thighs
+    notes: boneless, skinless
+  - quantity: ""
+    name: salt and pepper
+    notes: to taste
+  - quantity: "2 tbsp."
+    name: olive oil
+    notes: ""
+  - quantity: "3 tbsp."
+    name: soy sauce
+    notes: ""
+  - quantity: "3 tbsp."
+    name: honey
+    notes: ""
+  - quantity: "1 tbsp."
+    name: fresh ginger
+    notes: grated
+  - quantity: "2 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "3 cups"
+    name: chicken broth
+    notes: ""
+  - quantity: "4 oz"
+    name: ramen noodles
+    notes: discard seasoning packet
+  - quantity: "1 cup"
+    name: mushrooms
+    notes: sliced
+  - quantity: "1/2 cup"
+    name: shredded carrots
+    notes: ""
+  - quantity: ""
+    name: green onions
+    notes: for garnish
+  - quantity: ""
+    name: sesame seeds
+    notes: for garnish
+
+steps:
+  - Season chicken with salt and pepper. Heat olive oil in a large skillet over medium-high heat. Cook chicken until golden and cooked through, about 5–7 minutes per side. Remove and set aside.
+  - In the same skillet, add soy sauce, honey, ginger, and garlic. Simmer until sauce begins to thicken, about 2–3 minutes.
+  - Add chicken broth and bring to a gentle simmer. Add ramen noodles, mushrooms, and carrots. Cook about 5 minutes until noodles are tender.
+  - Slice chicken and return to the skillet. Toss to coat in sauce.
+  - Serve hot, garnished with green onions and sesame seeds.
+
+photos:
+  - path: images/ginger-glazed-chicken-ramen-1.png
+    caption: ""

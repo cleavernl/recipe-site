@@ -1,0 +1,51 @@
+title: Sausage Hash Brown Casserole
+description: |
+  Super easy dump meal. Feeds a lot. Serve with salad or roasted veggies; Texas garlic toast goes well on the side.
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - crockpot
+  - casserole
+  - dinner
+
+ingredients:
+  - quantity: "1 package"
+    name: kielbasa or smoked sausage
+    notes: cut in chunks
+  - quantity: "1"
+    name: frozen hash browns
+    notes: 32 oz bag; or shred potatoes with skins on (may need extra salt vs pre-salted store hash browns)
+  - quantity: "1"
+    name: onion
+    notes: diced
+  - quantity: "2 cups"
+    name: cheddar cheese
+    notes: plus about 1/2 cup extra for topping
+  - quantity: "1/2 cup"
+    name: sour cream
+    notes: ""
+  - quantity: "1/2 cup"
+    name: milk
+    notes: ""
+  - quantity: "1 can"
+    name: cream of mushroom or cream of chicken soup
+    notes: 10 oz
+  - quantity: ""
+    name: garlic powder, salt, and pepper
+    notes: to taste; or use Creole seasoning such as Tony Chachere's
+  - quantity: ""
+    name: bell pepper
+    notes: optional
+
+steps:
+  - Add sausage, hash browns, onion, and cheddar to a greased slow cooker (crockpot liners work for easy cleanup). Optionally sauté onion and garlic in a pan first, then add to the slow cooker.
+  - In a separate bowl, mix soup, milk, and sour cream. Season with salt, pepper, minced garlic, and onion powder to taste, then pour over sausage and hash browns.
+  - Sprinkle about 1/2 cup more cheese on top.
+  - Cook on LOW for 6 hours, or on HIGH for about 3–4 hours.
+  - Serve with salad or roasted vegetables if desired.
+
+photos:
+  - path: images/sausage-hash-brown-casserole-1.png
+    caption: ""

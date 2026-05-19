@@ -1,0 +1,54 @@
+title: Lemon Chicken Orzo Soup
+description: ""
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - soup
+  - chicken
+  - dinner
+
+ingredients:
+  - quantity: "1 cup"
+    name: orzo pasta
+    notes: ""
+  - quantity: "4 cups"
+    name: chicken broth
+    notes: ""
+  - quantity: "1 cup"
+    name: cooked chicken
+    notes: shredded
+  - quantity: "1 cup"
+    name: heavy cream
+    notes: ""
+  - quantity: "2 tbsp."
+    name: lemon juice
+    notes: ""
+  - quantity: "1"
+    name: lemon
+    notes: zested
+  - quantity: "1 cup"
+    name: spinach
+    notes: ""
+  - quantity: "1"
+    name: medium onion
+    notes: diced
+  - quantity: ""
+    name: salt and pepper
+    notes: to taste
+  - quantity: ""
+    name: fresh parsley
+    notes: for garnish
+
+steps:
+  - Sauté onion in a large pot until translucent. Add chicken broth and bring to a boil.
+  - Add orzo and cook until al dente.
+  - Stir in shredded chicken, heavy cream, lemon juice, and lemon zest.
+  - Add spinach and cook until wilted.
+  - Season with salt and pepper.
+  - Serve hot, garnished with parsley.
+
+photos:
+  - path: images/lemon-chicken-orzo-soup-1.png
+    caption: ""

@@ -1,0 +1,63 @@
+title: Taco Zucchini Skillet
+description: |
+  One-pan skillet meal.
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - beef
+  - dinner
+
+ingredients:
+  - quantity: "1 lb"
+    name: ground beef
+    notes: or ground turkey or chicken
+  - quantity: "1"
+    name: small onion
+    notes: diced
+  - quantity: "2 cloves"
+    name: garlic
+    notes: minced
+  - quantity: "2"
+    name: medium zucchinis
+    notes: diced
+  - quantity: "1"
+    name: bell pepper
+    notes: diced
+  - quantity: "1 can"
+    name: diced tomatoes
+    notes: 14.5 oz, drained
+  - quantity: "1 can"
+    name: tomato sauce
+    notes: 8 oz
+  - quantity: "1 tbsp."
+    name: taco seasoning
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: salt
+    notes: ""
+  - quantity: "1/2 tsp."
+    name: black pepper
+    notes: ""
+  - quantity: "1/2 cup"
+    name: shredded cheddar cheese
+    notes: ""
+  - quantity: "1/4 cup"
+    name: fresh cilantro
+    notes: chopped, optional
+  - quantity: "1"
+    name: avocado
+    notes: sliced, optional
+
+steps:
+  - In a large skillet over medium heat, cook ground meat until browned, breaking it up as it cooks. Drain excess fat.
+  - Add diced onion and garlic; sauté for 2–3 minutes until softened.
+  - Stir in diced zucchinis and bell pepper; cook for about 5 minutes until vegetables begin to soften.
+  - Add diced tomatoes, tomato sauce, taco seasoning, salt, and black pepper. Stir to combine and simmer for 5 minutes until heated through.
+  - Sprinkle cheddar on top, cover the skillet for 1–2 minutes, and let cheese melt.
+  - Garnish with cilantro and sliced avocado if desired.
+
+photos:
+  - path: images/taco-zucchini-skillet-1.png
+    caption: ""

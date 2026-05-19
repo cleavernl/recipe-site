@@ -1,0 +1,40 @@
+title: Pesto Bean Soup
+description: ""
+prep_time_minutes:
+cook_time_minutes:
+servings:
+source_url: ""
+tags:
+  - soup
+  - vegetarian
+  - dinner
+
+ingredients:
+  - quantity: "2 cans"
+    name: white beans
+    notes: 15 oz each, cannellini or Great Northern, drained and rinsed
+  - quantity: "4 cups"
+    name: vegetable broth
+    notes: ""
+  - quantity: "1/2 cup"
+    name: pesto sauce
+    notes: ""
+  - quantity: "1/3 cup"
+    name: sun-dried tomatoes
+    notes: chopped; or use fresh Roma tomatoes or a can of diced tomatoes
+  - quantity: "1/4 cup"
+    name: Parmesan cheese
+    notes: freshly grated
+  - quantity: ""
+    name: salt and black pepper
+    notes: to taste
+
+steps:
+  - In a large pot, combine white beans and vegetable broth over medium heat. Bring to a gentle simmer.
+  - Stir in pesto sauce until fully incorporated. Cook for about 5 minutes, allowing flavors to meld.
+  - Add chopped sun-dried tomatoes, stirring well. Continue to simmer for 5–10 minutes to soften tomatoes and deepen flavor.
+  - Season with salt and black pepper to taste. Ladle into bowls and garnish with Parmesan and extra black pepper if desired.
+
+photos:
+  - path: images/pesto-bean-soup-1.png
+    caption: ""
