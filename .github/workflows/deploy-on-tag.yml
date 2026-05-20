@@ -1,5 +1,12 @@
 # Deploy production on Phantom when a version tag is pushed.
 #
+# Each v* tag runs scripts/wsl-deploy-release.sh in RECIPE_SITE_DEPLOY_PATH:
+#   - checkout the tag (hard reset)
+#   - podman compose build --no-cache web (code, deps, collectstatic in image)
+#   - podman compose up --force-recreate (new container)
+#   - manage.py migrate in the running container
+#   - wait until /login/ responds in WSL
+#
 # Prerequisites (operator setup, not automatic):
 # - Self-hosted runner in WSL on Phantom with labels: self-hosted, recipe-site-phantom
 # - Repository variable RECIPE_SITE_DEPLOY_PATH = absolute WSL path to the production
@@ -24,7 +31,7 @@ jobs:
   deploy:
     runs-on: [self-hosted, recipe-site-phantom]
     steps:
-      - name: Checkout tag and restart containers
+      - name: Deploy release tag to production
         run: |
           set -euo pipefail
           DEPLOY_DIR='${{ vars.RECIPE_SITE_DEPLOY_PATH }}'
@@ -33,15 +40,5 @@ jobs:
             exit 1
           fi
           cd "$DEPLOY_DIR"
-          git fetch --tags origin
-          git checkout "${{ github.ref_name }}"
-          # --force-recreate ensures a new container runs the image just built (Compose can
-          # otherwise leave an older container attached to :8000 despite --build).
-          if command -v podman-compose >/dev/null 2>&1; then
-            podman-compose up -d --build --force-recreate
-          else
-            podman compose up -d --build --force-recreate
-          fi
-          chmod +x ./scripts/wsl-deploy-migrate.sh
-          ./scripts/wsl-deploy-migrate.sh
-          ./scripts/wsl-wait-for-web.sh 8000 90 2
+          chmod +x ./scripts/wsl-deploy-release.sh ./scripts/wsl-deploy-migrate.sh ./scripts/wsl-wait-for-web.sh
+          ./scripts/wsl-deploy-release.sh "${{ github.ref_name }}"
