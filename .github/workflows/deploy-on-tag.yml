@@ -40,5 +40,9 @@ jobs:
             exit 1
           fi
           cd "$DEPLOY_DIR"
+          # Checkout before chmod/run so a tag that introduces the release script can deploy.
+          git fetch --tags origin
+          git checkout -f "${{ github.ref_name }}"
+          git reset --hard "${{ github.ref_name }}"
           chmod +x ./scripts/wsl-deploy-release.sh ./scripts/wsl-deploy-migrate.sh ./scripts/wsl-wait-for-web.sh
           ./scripts/wsl-deploy-release.sh "${{ github.ref_name }}"
