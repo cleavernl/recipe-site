@@ -42,4 +42,6 @@ jobs:
           else
             podman compose up -d --build --force-recreate
           fi
+          chmod +x ./scripts/wsl-deploy-migrate.sh
+          ./scripts/wsl-deploy-migrate.sh
           ./scripts/wsl-wait-for-web.sh 8000 90 2

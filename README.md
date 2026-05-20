@@ -122,7 +122,7 @@ Replace `YOUR_WSL_UNIX_USER` with your Linux username inside Ubuntu (the one tha
 
 Production can deploy on **`v*`** tags using a self-hosted GitHub Actions runner; see `.github/workflows/deploy-on-tag.yml`. Set repository variable **`RECIPE_SITE_DEPLOY_PATH`** to the **same** absolute WSL path as **`-LinuxRepoRoot`** so reboot, manual compose, and CI deploy all agree.
 
-The workflow only runs **compose in WSL**. **Tailscale Serve** on Windows still uses **`netsh` portproxy** to reach WSL. If you see **502** on your MagicDNS URL right after a deploy but **`curl http://127.0.0.1:8000/`** works inside WSL, refresh portproxy using **After `podman compose` restarts in WSL only** below (run the startup task or **`windows-startup.ps1`**).
+The workflow runs **compose in WSL**, then **`scripts/wsl-deploy-migrate.sh`** (`manage.py migrate` in the web container). **Tailscale Serve** on Windows still uses **`netsh` portproxy** to reach WSL. If you see **502** on your MagicDNS URL right after a deploy but **`curl http://127.0.0.1:8000/`** works inside WSL, refresh portproxy using **After `podman compose` restarts in WSL only** below (run the startup task or **`windows-startup.ps1`**).
 
 ### After `podman compose` restarts in WSL only
 
