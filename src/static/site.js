@@ -83,7 +83,75 @@ document.addEventListener("DOMContentLoaded", () => {
     scheduleToast(toast, options.duration ?? DEFAULT_TOAST_MS);
   };
 
+  const PENDING_TOAST_KEY = "recipe-site-pending-toast";
+
+  const queueToastForNextPage = (message, tag = "success") => {
+    if (!message) {
+      return;
+    }
+    try {
+      sessionStorage.setItem(PENDING_TOAST_KEY, JSON.stringify({ message, tag }));
+    } catch {
+      /* storage disabled */
+    }
+  };
+
+  const showPendingToast = () => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_TOAST_KEY);
+      if (!raw) {
+        return;
+      }
+      sessionStorage.removeItem(PENDING_TOAST_KEY);
+      const data = JSON.parse(raw);
+      if (data?.message) {
+        showToast(data.message, data.tag || "success");
+      }
+    } catch {
+      sessionStorage.removeItem(PENDING_TOAST_KEY);
+    }
+  };
+
   document.querySelectorAll("[data-toast]").forEach(scheduleToast);
+  showPendingToast();
+
+  const updateStars = (form) => {
+    const checked = form.querySelector("input[type='radio']:checked");
+    const checkedValue = checked ? Number.parseInt(checked.value, 10) : 0;
+    form.querySelectorAll(".star-choice").forEach((choice) => {
+      const input = choice.querySelector("input[type='radio']");
+      const value = input ? Number.parseInt(input.value, 10) : 0;
+      choice.classList.toggle("is-filled", value <= checkedValue);
+    });
+  };
+
+  const bindStarRatingForm = (form, { onSaved } = {}) => {
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+    updateStars(form);
+    form.querySelectorAll("input[type='radio']").forEach((input) => {
+      input.addEventListener("change", async () => {
+        updateStars(form);
+        try {
+          const response = await fetch(form.action.split("#")[0], {
+            method: "POST",
+            body: new FormData(form),
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+          });
+          const payload = await response.json();
+          if (onSaved) {
+            onSaved(payload, response);
+          }
+        } catch {
+          showToast("Rating could not be saved. Please try again.", "error");
+        }
+      });
+    });
+  };
 
   (() => {
     const datalist = document.getElementById("recipe-tag-suggestions");
@@ -292,6 +360,511 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-print-recipe]").forEach((button) => {
     button.addEventListener("click", () => window.print());
   });
+
+  (() => {
+    const root = document.querySelector("[data-make-mode]");
+    if (!root) {
+      return;
+    }
+
+    const track = root.querySelector("[data-make-swipe-track]");
+    const zone = root.querySelector("[data-make-swipe-zone]");
+    const panels = [...root.querySelectorAll("[data-make-panel]")];
+    const phaseEl = root.querySelector("[data-make-phase]");
+    const dots = [...root.querySelectorAll("[data-make-dot]")];
+    const swipeHint = root.querySelector("[data-make-swipe-hint]");
+    const prevBtn = root.querySelector("[data-make-nav='prev']");
+    const nextBtn = root.querySelector("[data-make-nav='next']");
+    const mobileQuery = window.matchMedia("(max-width: 48rem)");
+
+    const panelKeys = ["ingredients", "steps"];
+    const phaseLabels = ["Ingredients", "Instructions"];
+    const urls = {
+      ingredients: root.dataset.makeUrlIngredients || "",
+      steps: root.dataset.makeUrlSteps || "",
+    };
+    const detailUrl = root.dataset.makeDetailUrl || "";
+    const recordForm = document.getElementById("make-record-form");
+    const exitOverlay = document.querySelector("[data-make-exit-overlay]");
+    const exitDialog = exitOverlay?.querySelector("[data-make-exit-dialog]");
+    const exitStepMade = exitOverlay?.querySelector('[data-make-exit-step="made"]');
+    const exitStepReview = exitOverlay?.querySelector('[data-make-exit-step="review"]');
+    const exitReviewLede = exitOverlay?.querySelector("[data-make-exit-review-lede]");
+    const exitStayClose = exitOverlay?.querySelector("[data-make-exit-stay]");
+    const exitBackBtn = exitOverlay?.querySelector("[data-make-exit-back]");
+    const recipeSlug = root.dataset.makeRecipeSlug || "";
+    const panelScrollTops = {
+      ingredients: 0,
+      steps: 0,
+    };
+
+    let exitTargetUrl = detailUrl;
+    let exitDialogOpen = false;
+    let pendingMadeRecord = false;
+
+    const panelContentEl = (panel) => panel.querySelector("[data-make-scroll]") || panel;
+
+    const makePathnames = new Set(
+      [urls.ingredients, urls.steps]
+        .map((href) => {
+          try {
+            return new URL(href, window.location.origin).pathname;
+          } catch {
+            return "";
+          }
+        })
+        .filter(Boolean),
+    );
+    const isMakePath = (pathname) => makePathnames.has(pathname);
+
+    const navigateAway = (url) => {
+      window.location.assign(url || detailUrl);
+    };
+
+    const showExitStep = (step) => {
+      if (!(exitStepMade instanceof HTMLElement) || !(exitStepReview instanceof HTMLElement)) {
+        return;
+      }
+      const onMade = step === "made";
+      exitStepMade.hidden = !onMade;
+      exitStepReview.hidden = onMade;
+      exitBackBtn?.toggleAttribute("hidden", onMade);
+      if (exitDialog instanceof HTMLElement) {
+        exitDialog.setAttribute(
+          "aria-labelledby",
+          onMade ? "make-exit-made-title" : "make-exit-review-title",
+        );
+        exitDialog.classList.toggle("is-review-step", !onMade);
+      }
+    };
+
+    const syncExitReviewLede = () => {
+      if (!(exitReviewLede instanceof HTMLElement)) {
+        return;
+      }
+      const checked = exitRatingForm?.querySelector("input[type='radio']:checked");
+      exitReviewLede.textContent = checked
+        ? "Update your rating or skip for now."
+        : "Tap a star to rate this recipe.";
+    };
+
+    const recordMadeIfPending = async () => {
+      if (!pendingMadeRecord) {
+        return;
+      }
+      await recordMade();
+      pendingMadeRecord = false;
+    };
+
+    const finalizeMadeAndLeave = async () => {
+      await recordMadeIfPending();
+      closeExitDialog();
+      navigateAway(exitTargetUrl);
+    };
+
+    const skipReviewAndLeave = async () => {
+      try {
+        await finalizeMadeAndLeave();
+      } catch {
+        showToast("Could not save that you made this recipe. Try again.", "error");
+      }
+    };
+
+    const closeExitDialog = () => {
+      if (!(exitOverlay instanceof HTMLElement)) {
+        return;
+      }
+      exitOverlay.hidden = true;
+      exitDialogOpen = false;
+      document.body.classList.remove("make-exit-open");
+    };
+
+    const openExitDialog = () => {
+      if (!(exitOverlay instanceof HTMLElement) || !(exitDialog instanceof HTMLElement)) {
+        navigateAway(exitTargetUrl);
+        return;
+      }
+      pendingMadeRecord = false;
+      showExitStep("made");
+      exitOverlay.hidden = false;
+      exitDialogOpen = true;
+      document.body.classList.add("make-exit-open");
+      exitDialog.focus();
+    };
+
+    const beginExit = (targetUrl) => {
+      exitTargetUrl = targetUrl || detailUrl;
+      openExitDialog();
+    };
+
+    const exitRatingForm = exitOverlay?.querySelector("[data-make-exit-rating]");
+
+    const recordMade = async () => {
+      if (!(recordForm instanceof HTMLFormElement)) {
+        return { ok: false, has_rating: false };
+      }
+      const response = await fetch(recordForm.action, {
+        method: "POST",
+        body: new FormData(recordForm),
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error("record failed");
+      }
+      return payload;
+    };
+
+    const syncExitTrap = () => {
+      if (activeIndex !== 0 || history.state?.makeExitTrap) {
+        return;
+      }
+      history.pushState(
+        { makeExitTrap: 1, makePanel: panelKeys[activeIndex] },
+        "",
+        window.location.href,
+      );
+    };
+
+    const listScrollOffset = () => {
+      if (!zone) {
+        return window.scrollY;
+      }
+      return Math.max(0, -zone.getBoundingClientRect().top);
+    };
+
+    const savePanelScroll = (panelIndex) => {
+      panelScrollTops[panelKeys[panelIndex]] = listScrollOffset();
+    };
+
+    const restorePanelScroll = (panelIndex) => {
+      if (!zone) {
+        return;
+      }
+      const offset = panelScrollTops[panelKeys[panelIndex]] || 0;
+      const zoneTop = zone.getBoundingClientRect().top + window.scrollY;
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      window.scrollTo(0, Math.min(zoneTop + offset, maxScroll));
+    };
+
+    const measurePanelHeight = (panel) => panelContentEl(panel).scrollHeight;
+
+    const syncZoneHeight = ({ duringDrag = false } = {}) => {
+      if (!zone || panels.length === 0) {
+        return;
+      }
+      const height = duringDrag
+        ? Math.max(...panels.map(measurePanelHeight))
+        : measurePanelHeight(panels[activeIndex]);
+      zone.style.height = `${Math.ceil(height)}px`;
+    };
+
+    const afterLayout = (callback) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(callback);
+      });
+    };
+
+    let activeIndex = panelKeys.indexOf(root.dataset.makeInitialPanel || "ingredients");
+    if (activeIndex < 0) {
+      activeIndex = 0;
+    }
+
+    const syncSwipeHint = () => {
+      if (!swipeHint || !mobileQuery.matches) {
+        return;
+      }
+      swipeHint.textContent =
+        activeIndex === 0
+          ? "Swipe left for instructions. Your place in the list is saved when you switch."
+          : "Swipe right for ingredients. Your place in the list is saved when you switch.";
+    };
+
+    const updateUi = ({ duringDrag = false, restoreScroll = false } = {}) => {
+      if (track) {
+        track.style.setProperty("--make-panel-index", String(activeIndex));
+        track.dataset.activePanel = panelKeys[activeIndex];
+        track.style.transform = "";
+        track.classList.remove("is-dragging");
+      }
+      zone?.classList.remove("is-dragging");
+      if (phaseEl) {
+        phaseEl.textContent = `Step ${activeIndex + 1} of 2 · ${phaseLabels[activeIndex]}`;
+      }
+      dots.forEach((dot, index) => {
+        dot.classList.toggle("is-active", index === activeIndex);
+      });
+      prevBtn?.toggleAttribute("disabled", activeIndex === 0);
+      nextBtn?.toggleAttribute("disabled", activeIndex >= panels.length - 1);
+      syncSwipeHint();
+      afterLayout(() => {
+        syncZoneHeight({ duringDrag });
+        if (restoreScroll) {
+          restorePanelScroll(activeIndex);
+        }
+      });
+    };
+
+    const setPanel = (index, { updateHistory = true, restoreScroll = true } = {}) => {
+      const next = Math.max(0, Math.min(panels.length - 1, index));
+      if (next === activeIndex) {
+        return;
+      }
+      savePanelScroll(activeIndex);
+      activeIndex = next;
+      if (updateHistory) {
+        const url = activeIndex === 0 ? urls.ingredients : urls.steps;
+        if (url) {
+          history.replaceState({ makePanel: panelKeys[activeIndex] }, "", url);
+        }
+      }
+      updateUi({ restoreScroll });
+    };
+
+    root.addEventListener("click", (event) => {
+      const exitTrigger = event.target.closest("[data-make-exit]");
+      if (exitTrigger instanceof HTMLElement) {
+        event.preventDefault();
+        beginExit(exitTrigger instanceof HTMLAnchorElement ? exitTrigger.href : detailUrl);
+        return;
+      }
+      const item = event.target.closest("[data-make-item]");
+      if (item instanceof HTMLButtonElement) {
+        const isDone = item.classList.toggle("is-done");
+        item.setAttribute("aria-pressed", isDone ? "true" : "false");
+        afterLayout(() => syncZoneHeight());
+        return;
+      }
+      const nav = event.target.closest("[data-make-nav]");
+      if (nav instanceof HTMLButtonElement && !nav.disabled) {
+        event.preventDefault();
+        if (nav.dataset.makeNav === "prev") {
+          setPanel(activeIndex - 1);
+        } else if (nav.dataset.makeNav === "next") {
+          setPanel(activeIndex + 1);
+        }
+      }
+    });
+
+    history.replaceState({ makePanel: panelKeys[activeIndex] }, "", window.location.href);
+    updateUi();
+    syncExitTrap();
+
+    exitStayClose?.addEventListener("click", () => {
+      pendingMadeRecord = false;
+      closeExitDialog();
+    });
+
+    exitOverlay?.querySelector("[data-make-exit-not-made]")?.addEventListener("click", () => {
+      pendingMadeRecord = false;
+      closeExitDialog();
+      navigateAway(exitTargetUrl);
+    });
+
+    exitOverlay?.querySelector("[data-make-exit-made]")?.addEventListener("click", () => {
+      pendingMadeRecord = true;
+      syncExitReviewLede();
+      if (exitRatingForm instanceof HTMLFormElement) {
+        updateStars(exitRatingForm);
+      }
+      showExitStep("review");
+      if (exitDialog instanceof HTMLElement) {
+        exitDialog.focus();
+      }
+      const firstStar = exitRatingForm?.querySelector("input[type='radio']");
+      if (firstStar instanceof HTMLInputElement) {
+        firstStar.focus();
+      }
+    });
+
+    exitOverlay?.querySelector("[data-make-exit-skip-review]")?.addEventListener("click", () => {
+      void skipReviewAndLeave();
+    });
+
+    exitBackBtn?.addEventListener("click", () => {
+      pendingMadeRecord = false;
+      showExitStep("made");
+      if (exitDialog instanceof HTMLElement) {
+        exitDialog.focus();
+      }
+    });
+
+    bindStarRatingForm(exitRatingForm, {
+      onSaved: (payload, response) => {
+        if (response.ok && payload.ok) {
+          queueToastForNextPage(payload.message, "success");
+          void (async () => {
+            try {
+              await finalizeMadeAndLeave();
+            } catch {
+              showToast("Could not save that you made this recipe. Try again.", "error");
+            }
+          })();
+          return;
+        }
+        showToast(payload.message, "error");
+      },
+    });
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (exitDialogOpen) {
+          return;
+        }
+        const link = event.target instanceof Element ? event.target.closest("a") : null;
+        if (!(link instanceof HTMLAnchorElement) || root.contains(link)) {
+          return;
+        }
+        if (link.target === "_blank" || link.hasAttribute("download")) {
+          return;
+        }
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:")) {
+          return;
+        }
+        let url;
+        try {
+          url = new URL(link.href, window.location.origin);
+        } catch {
+          return;
+        }
+        if (url.origin !== window.location.origin || isMakePath(url.pathname)) {
+          return;
+        }
+        event.preventDefault();
+        beginExit(`${url.pathname}${url.search}${url.hash}`);
+      },
+      true,
+    );
+
+    window.addEventListener("popstate", (event) => {
+      if (event.state?.makeExitTrap === 1) {
+        history.pushState(
+          { makeExitTrap: 1, makePanel: panelKeys[activeIndex] },
+          "",
+          window.location.href,
+        );
+        beginExit(detailUrl);
+        return;
+      }
+      const panel = event.state?.makePanel;
+      if (panel && panelKeys.includes(panel)) {
+        const nextIndex = panelKeys.indexOf(panel);
+        if (nextIndex !== activeIndex) {
+          savePanelScroll(activeIndex);
+          activeIndex = nextIndex;
+          updateUi({ restoreScroll: true });
+          if (activeIndex === 0) {
+            syncExitTrap();
+          }
+        }
+      }
+    });
+
+    mobileQuery.addEventListener("change", syncSwipeHint);
+    window.addEventListener("resize", () => {
+      afterLayout(() => syncZoneHeight());
+    });
+
+    if (!zone || !track) {
+      return;
+    }
+
+    let startX = 0;
+    let startY = 0;
+    let pointerX = 0;
+    let axis = null;
+    let dragging = false;
+
+    const setDragOffset = (dx) => {
+      const width = zone.getBoundingClientRect().width;
+      const base = -activeIndex * width;
+      track.style.transform = `translate3d(${base + dx}px, 0, 0)`;
+    };
+
+    const snapFromDrag = (dx) => {
+      track.style.transform = "";
+      track.classList.remove("is-dragging");
+      const threshold = Math.min(80, zone.getBoundingClientRect().width * 0.18);
+      if (dx <= -threshold && activeIndex < panels.length - 1) {
+        setPanel(activeIndex + 1);
+        return;
+      }
+      if (dx >= threshold && activeIndex > 0) {
+        setPanel(activeIndex - 1);
+        return;
+      }
+      updateUi({ duringDrag: false });
+    };
+
+    const onTouchStart = (event) => {
+      if (!mobileQuery.matches || event.touches.length !== 1) {
+        return;
+      }
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      pointerX = startX;
+      axis = null;
+      dragging = false;
+    };
+
+    const onTouchMove = (event) => {
+      if (!mobileQuery.matches || event.touches.length !== 1) {
+        return;
+      }
+      const x = event.touches[0].clientX;
+      const y = event.touches[0].clientY;
+      const dx = x - startX;
+      const dy = y - startY;
+
+      if (axis === null) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+          return;
+        }
+        axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (axis === "y") {
+        return;
+      }
+
+      event.preventDefault();
+      if (!dragging) {
+        dragging = true;
+        track.classList.add("is-dragging");
+        zone.classList.add("is-dragging");
+        syncZoneHeight({ duringDrag: true });
+      }
+      let offset = dx;
+      if (
+        (activeIndex === 0 && offset > 0) ||
+        (activeIndex === panels.length - 1 && offset < 0)
+      ) {
+        offset *= 0.35;
+      }
+      setDragOffset(offset);
+      pointerX = x;
+    };
+
+    const onTouchEnd = () => {
+      if (!mobileQuery.matches || axis !== "x" || !dragging) {
+        axis = null;
+        dragging = false;
+        return;
+      }
+      snapFromDrag(pointerX - startX);
+      axis = null;
+      dragging = false;
+    };
+
+    zone.addEventListener("touchstart", onTouchStart, { passive: true });
+    zone.addEventListener("touchmove", onTouchMove, { passive: false });
+    zone.addEventListener("touchend", onTouchEnd);
+    zone.addEventListener("touchcancel", onTouchEnd);
+  })();
 
   document.querySelectorAll(".recipe-quick-tag").forEach((details) => {
     if (!(details instanceof HTMLDetailsElement)) {
@@ -970,6 +1543,127 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (input instanceof HTMLInputElement) {
+      const listStateStorageKey = "recipe-list-state";
+
+      const readListState = () => {
+        try {
+          const raw = sessionStorage.getItem(listStateStorageKey);
+          if (!raw) {
+            return null;
+          }
+          const data = JSON.parse(raw);
+          if (!data || typeof data !== "object") {
+            return null;
+          }
+          return data;
+        } catch {
+          return null;
+        }
+      };
+
+      const writeListState = (state) => {
+        try {
+          sessionStorage.setItem(listStateStorageKey, JSON.stringify(state));
+        } catch {
+          /* storage full or disabled */
+        }
+      };
+
+      const captureListStateFromForm = () => {
+        const tags = [];
+        getTagHiddenRoot()?.querySelectorAll("input[name='tag']").forEach((el) => {
+          if (el instanceof HTMLInputElement && el.value) {
+            tags.push(el.value);
+          }
+        });
+        return {
+          q: input.value.trim(),
+          sort: getSortValue(),
+          sort_dir: getSortDirValue(),
+          tags,
+        };
+      };
+
+      const persistListState = () => {
+        writeListState(captureListStateFromForm());
+      };
+
+      const listUrlFromState = (state) => {
+        const params = new URLSearchParams();
+        const q = (state.q || "").trim();
+        if (q) {
+          params.set("q", q);
+        }
+        const sort = validSortValues.has(state.sort) ? state.sort : sortTitle;
+        const defaultDir = getDefaultDirForSort(sort);
+        const dir =
+          state.sort_dir === "asc" || state.sort_dir === "desc" ? state.sort_dir : defaultDir;
+        const omitSortParams = sort === sortTitle && dir === getDefaultDirForSort(sortTitle);
+        if (!omitSortParams) {
+          params.set("sort", sort);
+          if (dir !== defaultDir) {
+            params.set("sort_dir", dir);
+          }
+        }
+        const tags = Array.isArray(state.tags) ? state.tags : [];
+        tags.forEach((slug) => {
+          if (slug) {
+            params.append("tag", slug);
+          }
+        });
+        const search = params.toString();
+        return `${window.location.pathname}${search ? `?${search}` : ""}`;
+      };
+
+      const restoreListStateIfNeeded = () => {
+        const stored = readListState();
+        if (!stored) {
+          return false;
+        }
+        const current = new URL(window.location.href);
+        const hasSort =
+          current.searchParams.has("sort") || current.searchParams.has("sort_dir");
+        const hasTags = current.searchParams.has("tag");
+        const hasQ = current.searchParams.has("q");
+
+        const urlSortRaw = current.searchParams.get("sort") || sortTitle;
+        const urlSort = validSortValues.has(urlSortRaw) ? urlSortRaw : sortTitle;
+        const urlDefaultDir = getDefaultDirForSort(urlSort);
+        const urlDirRaw = current.searchParams.get("sort_dir");
+        const urlSortDir =
+          urlDirRaw === "asc" || urlDirRaw === "desc" ? urlDirRaw : urlDefaultDir;
+
+        const storedSort = validSortValues.has(stored.sort) ? stored.sort : sortTitle;
+        const storedDefaultDir = getDefaultDirForSort(storedSort);
+        const storedSortDir =
+          stored.sort_dir === "asc" || stored.sort_dir === "desc"
+            ? stored.sort_dir
+            : storedDefaultDir;
+
+        const merged = {
+          q: hasQ ? (current.searchParams.get("q") || "").trim() : (stored.q || "").trim(),
+          sort: hasSort ? urlSort : storedSort,
+          sort_dir: hasSort ? urlSortDir : storedSortDir,
+          tags: hasTags
+            ? current.searchParams.getAll("tag").filter(Boolean)
+            : Array.isArray(stored.tags)
+              ? stored.tags.filter(Boolean)
+              : [],
+        };
+
+        const target = listUrlFromState(merged);
+        const here = `${current.pathname}${current.search}`;
+        if (target !== here) {
+          window.location.replace(target);
+          return true;
+        }
+        return false;
+      };
+
+      if (restoreListStateIfNeeded()) {
+        return;
+      }
+
       let debounceId = 0;
       let abortController = null;
       let requestSeq = 0;
@@ -1241,6 +1935,7 @@ document.addEventListener("DOMContentLoaded", () => {
           nextUrl.searchParams.delete("partial");
           const search = nextUrl.searchParams.toString();
           window.history.replaceState({}, "", `${nextUrl.pathname}${search ? `?${search}` : ""}`);
+          persistListState();
           syncRandomPickHref();
         } catch (error) {
           if (seq !== requestSeq) {
@@ -1437,20 +2132,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
 
+      persistListState();
       syncRandomPickHref();
       observeRecipeListSentinel();
     }
   }
-
-  const updateStars = (form) => {
-    const checked = form.querySelector("input[type='radio']:checked");
-    const checkedValue = checked ? Number.parseInt(checked.value, 10) : 0;
-    form.querySelectorAll(".star-choice").forEach((choice) => {
-      const input = choice.querySelector("input[type='radio']");
-      const value = input ? Number.parseInt(input.value, 10) : 0;
-      choice.classList.toggle("is-filled", value <= checkedValue);
-    });
-  };
 
   const updateReviewerName = (element, payload) => {
     const userName = payload.user_name || payload.reviewer_label;
@@ -1738,29 +2424,33 @@ document.addEventListener("DOMContentLoaded", () => {
   initRecipeEditSimilarTagModal();
   initRecipeQuickTagSimilarConfirm();
 
-  document.querySelectorAll(".star-rating-form").forEach((form) => {
-    updateStars(form);
+  const promptReviewSection = document.querySelector("[data-prompt-review]");
+  if (promptReviewSection instanceof HTMLElement) {
+    promptReviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    const ratingCard = promptReviewSection.querySelector(".is-prompt-review-focus");
+    const firstStar = promptReviewSection.querySelector(".star-rating-form input[type='radio']");
+    if (firstStar instanceof HTMLInputElement) {
+      window.setTimeout(() => firstStar.focus(), 400);
+    } else if (ratingCard instanceof HTMLElement) {
+      ratingCard.setAttribute("tabindex", "-1");
+      window.setTimeout(() => ratingCard.focus(), 400);
+    }
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("review");
+    const search = cleanUrl.searchParams.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${cleanUrl.pathname}${search ? `?${search}` : ""}${cleanUrl.hash}`,
+    );
+  }
 
-    form.querySelectorAll("input[type='radio']").forEach((input) => {
-      input.addEventListener("change", async () => {
-        updateStars(form);
-
-        try {
-          const response = await fetch(form.action.split("#")[0], {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-              "X-Requested-With": "XMLHttpRequest",
-            },
-            credentials: "same-origin",
-          });
-          const payload = await response.json();
-          updateRatingDisplay(payload);
-          showToast(payload.message, response.ok && payload.ok ? "success" : "error");
-        } catch {
-          showToast("Rating could not be saved. Please try again.", "error");
-        }
-      });
+  document.querySelectorAll(".star-rating-form:not([data-make-exit-rating])").forEach((form) => {
+    bindStarRatingForm(form, {
+      onSaved: (payload, response) => {
+        updateRatingDisplay(payload);
+        showToast(payload.message, response.ok && payload.ok ? "success" : "error");
+      },
     });
   });
 });

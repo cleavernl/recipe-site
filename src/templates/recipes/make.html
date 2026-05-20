@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load recipe_format %}
+
+{% block title %}Make {{ recipe.title }}{% endblock %}
+
+{% block content %}
+  <article
+    class="make-mode"
+    data-make-mode
+    data-make-initial-panel="{{ make_active_panel }}"
+    data-make-recipe-slug="{{ recipe.slug }}"
+    data-make-url-ingredients="{% url 'recipes:make' recipe.slug %}"
+    data-make-url-steps="{% url 'recipes:make_steps' recipe.slug %}"
+    data-make-detail-url="{{ make_detail_url }}"
+    data-make-record-url="{{ make_record_url }}"
+  >
+    <form id="make-record-form" method="post" action="{{ make_record_url }}" hidden>
+      {% csrf_token %}
+    </form>
+    {% include "recipes/_make_header.html" %}
+
+    <p class="make-swipe-hint" data-make-swipe-hint>Swipe left or right to switch between ingredients and instructions.</p>
+
+    <div class="make-carousel">
+      <div class="make-swipe-zone" data-make-swipe-zone>
+        <div
+          class="make-swipe-track"
+          data-make-swipe-track
+          style="--make-panel-index: {% if make_active_panel == 'steps' %}1{% else %}0{% endif %};"
+          data-active-panel="{{ make_active_panel }}"
+        >
+          <section class="make-panel" data-make-panel="ingredients" aria-label="Ingredients">
+            <div class="make-panel-scroll" data-make-scroll tabindex="-1">
+            <p class="make-hint">Tap each ingredient when you have it ready.</p>
+            <ul class="make-checklist">
+                {% for ingredient in recipe.ingredients.all %}
+                  <li>
+                    <button
+                      type="button"
+                      class="make-check-item make-check-item-ingredient{% if not ingredient.quantity and not ingredient.notes %} make-check-item--name-only{% endif %}"
+                      data-make-item
+                      aria-pressed="false"
+                    >
+                      <span class="make-check-body">
+                        <span class="make-check-primary">{{ ingredient.name }}</span>
+                        {% if ingredient.quantity or ingredient.notes %}
+                          <span class="make-check-meta">
+                            {% if ingredient.quantity %}
+                              <span class="make-check-quantity">{{ ingredient.quantity }}</span>
+                            {% endif %}
+                            {% if ingredient.notes %}
+                              <span class="make-check-note">{{ ingredient.notes }}</span>
+                            {% endif %}
+                          </span>
+                        {% endif %}
+                      </span>
+                    </button>
+                  </li>
+                {% empty %}
+                  <li class="make-check-empty">No ingredients listed for this recipe.</li>
+                {% endfor %}
+            </ul>
+            </div>
+          </section>
+
+          <section class="make-panel" data-make-panel="steps" aria-label="Instructions">
+            <div class="make-panel-scroll" data-make-scroll tabindex="-1">
+            <p class="make-hint">Tap each step when you finish it.</p>
+            <ol class="make-checklist make-checklist-steps">
+                {% for step in recipe.steps.all %}
+                  <li>
+                    <button type="button" class="make-check-item make-check-item-step" data-make-item aria-pressed="false">
+                      <span class="make-check-body">
+                        <span class="make-check-step-number" aria-hidden="true">{{ forloop.counter }}</span>
+                        <span class="make-check-step-text recipe-markdown">{{ step.text|recipe_markdown }}</span>
+                      </span>
+                    </button>
+                  </li>
+                {% empty %}
+                  <li class="make-check-empty">No instructions listed for this recipe.</li>
+              {% endfor %}
+            </ol>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="make-nav-fixed" data-make-nav-fixed>
+      <button
+        type="button"
+        class="button secondary icon-only-button make-nav make-nav-prev"
+        data-make-nav="prev"
+        aria-label="Ingredients"
+        {% if make_active_panel == 'ingredients' %}disabled{% endif %}
+      >
+        ←
+      </button>
+      <button
+        type="button"
+        class="button secondary icon-only-button make-nav make-nav-next"
+        data-make-nav="next"
+        aria-label="Instructions"
+        {% if make_active_panel == 'steps' %}disabled{% endif %}
+      >
+        →
+      </button>
+    </div>
+
+    <div class="make-swipe-dots" aria-hidden="true">
+      <span class="make-swipe-dot{% if make_active_panel != 'steps' %} is-active{% endif %}" data-make-dot></span>
+      <span class="make-swipe-dot{% if make_active_panel == 'steps' %} is-active{% endif %}" data-make-dot></span>
+    </div>
+
+    {% include "recipes/_make_exit_dialog.html" %}
+  </article>
+{% endblock %}

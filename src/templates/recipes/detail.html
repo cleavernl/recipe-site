@@ -75,6 +75,12 @@
       </div>
     </header>
 
+    {% if not recipe.deleted_at %}
+      <div class="make-this-cta">
+        <a class="button make-this-button" href="{% url 'recipes:make' recipe.slug %}">Make This</a>
+      </div>
+    {% endif %}
+
     {% if recipe.photo %}
       <img class="hero-photo" src="{{ recipe.photo.url }}" alt="">
     {% endif %}
@@ -169,11 +175,11 @@
     </div>
   {% endif %}
 
-  <section class="discussion" id="discussion">
+  <section class="discussion{% if prompt_review %} is-prompt-review{% endif %}" id="discussion"{% if prompt_review %} data-prompt-review{% endif %}>
     <h2>Ratings and comments</h2>
     <div class="rating-panel">
       <div class="rating-overview-stack">
-        <section class="rating-card">
+        <section class="rating-card{% if prompt_review %} is-prompt-review-focus{% endif %}">
           <div class="rating-section-header">
             <h3>Your rating</h3>
             <p>Tap a star to update your score.</p>

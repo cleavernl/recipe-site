@@ -7,7 +7,7 @@ alwaysApply: false
 # Django Recipe App
 
 - The app is a server-rendered Django site under `src/` with `accounts` for invite-code signup and `recipes` for recipe content, comments, and ratings.
-- Keep recipe content private by default. Recipe browsing, details, print pages, comments, ratings, and recipe mutations should require authentication unless a future decision record explicitly changes that.
+- Keep recipe content private by default. Recipe browsing, details, print pages, make-it mode (`/make/` ingredients then `/make/steps/` instructions), comments, ratings, and recipe mutations should require authentication unless a future decision record explicitly changes that.
 - Preserve owner/staff edit permissions for recipes. Other authenticated users may view, comment, and rate.
 - Use `uv` for Python dependency management and rootless Podman Compose for self-hosting. The first deployment target is SQLite plus local uploaded media volumes.
 - Source `scripts/project-env.sh` before local `uv`, Python, test, or management commands so tooling stays inside `recipe-site-home`.

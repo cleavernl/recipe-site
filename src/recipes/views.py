@@ -33,7 +33,7 @@ from recipes.forms import (
     RecipeTagLineFormSet,
     similar_tag_pairs_for_names,
 )
-from recipes.models import Rating, Recipe, Tag, sync_recipe_tags
+from recipes.models import Rating, Recipe, RecipeMade, Tag, sync_recipe_tags
 from recipes.photo_sync import sync_legacy_recipe_photo_to_gallery
 
 
@@ -441,6 +441,7 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
             for rating in recipe.ratings.all().order_by("-updated_at", "-id")
         ]
         context["comment_sort"] = comment_sort
+        context["prompt_review"] = self.request.GET.get("review") == "1"
         context["comments"] = [
             {
                 "author_name": display_user_name(comment.author),
@@ -658,6 +659,56 @@ class RecipePrintView(PrivateRecipeMixin, DetailView):
 
     def get_queryset(self):
         return current_recipes().select_related("owner").prefetch_related("ingredients", "steps")
+
+
+class RecipeMakeMixin(PrivateRecipeMixin, DetailView):
+    model = Recipe
+    template_name = "recipes/make.html"
+    context_object_name = "recipe"
+    make_active_panel = "ingredients"
+
+    def get_queryset(self):
+        return current_recipes().prefetch_related("ingredients", "steps")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        recipe = self.object
+        panel = self.make_active_panel
+        context["make_active_panel"] = panel
+        context["make_step"] = 1 if panel == "ingredients" else 2
+        context["make_step_label"] = "Ingredients" if panel == "ingredients" else "Instructions"
+        context["make_detail_url"] = recipe.get_absolute_url()
+        context["make_record_url"] = reverse("recipes:make_record", kwargs={"slug": recipe.slug})
+        context["rating_form"] = RatingForm(
+            instance=Rating.objects.filter(recipe=recipe, user=self.request.user).first(),
+        )
+        return context
+
+
+class RecipeMakeIngredientsView(RecipeMakeMixin):
+    make_active_panel = "ingredients"
+
+
+class RecipeMakeStepsView(RecipeMakeMixin):
+    make_active_panel = "steps"
+
+
+@login_required
+@require_POST
+def record_recipe_made(request, slug):
+    recipe = get_object_or_404(current_recipes(), slug=slug)
+    RecipeMade.objects.create(recipe=recipe, user=request.user)
+    rating = Rating.objects.filter(recipe=recipe, user=request.user).first()
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse(
+            {
+                "ok": True,
+                "has_rating": rating is not None,
+                "rating": rating.value if rating else None,
+            },
+        )
+    messages.success(request, "Nice work — we saved that you made this recipe.")
+    return redirect(recipe.get_absolute_url())
 
 
 @method_decorator(login_required, name="dispatch")

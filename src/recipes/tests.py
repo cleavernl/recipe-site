@@ -19,6 +19,7 @@ from recipes.models import (
     InstructionStep,
     Rating,
     Recipe,
+    RecipeMade,
     RecipePhoto,
     Tag,
     sync_recipe_tags,
@@ -986,6 +987,141 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response["Location"])
+
+    def test_make_views_require_login(self):
+        for url_name in ("recipes:make", "recipes:make_steps"):
+            response = self.client.get(reverse(url_name, kwargs={"slug": self.recipe.slug}))
+            self.assertEqual(response.status_code, 302)
+            self.assertIn(reverse("login"), response["Location"])
+
+    def test_recipe_detail_shows_make_this_for_active_recipes(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "Make This")
+        self.assertContains(
+            response,
+            reverse("recipes:make", kwargs={"slug": self.recipe.slug}),
+        )
+
+    def test_recipe_detail_hides_make_this_when_deleted(self):
+        self.recipe.deleted_at = timezone.now()
+        self.recipe.save(update_fields=["deleted_at"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertNotContains(response, "Make This")
+
+    def test_make_ingredients_page_lists_ingredients(self):
+        Ingredient.objects.create(recipe=self.recipe, quantity="1 cup", name="milk", order=2)
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:make", kwargs={"slug": self.recipe.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Step 1 of 2")
+        self.assertContains(response, "flour")
+        self.assertContains(response, "milk")
+        self.assertContains(response, "1 cup")
+        self.assertContains(
+            response,
+            reverse("recipes:make_steps", kwargs={"slug": self.recipe.slug}),
+        )
+
+    def test_make_steps_page_lists_instructions(self):
+        step = self.recipe.steps.get()
+        step.text = "Whisk until smooth."
+        step.save(update_fields=["text"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:make_steps", kwargs={"slug": self.recipe.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-make-mode")
+        self.assertContains(response, 'data-make-initial-panel="steps"')
+        self.assertContains(response, "Step 2 of 2")
+        self.assertContains(response, "Whisk until smooth.")
+        self.assertContains(response, reverse("recipes:make", kwargs={"slug": self.recipe.slug}))
+        self.assertContains(response, reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+    def test_make_page_includes_swipe_panels_and_scroll_targets(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:make", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "data-make-swipe-zone")
+        self.assertContains(response, 'data-make-panel="ingredients"')
+        self.assertContains(response, 'data-make-panel="steps"')
+        self.assertContains(response, "data-make-scroll", count=2)
+        self.assertContains(response, 'data-make-nav="prev"')
+        self.assertContains(response, 'data-make-nav="next"')
+
+    def test_make_page_includes_exit_dialog_and_record_form(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:make", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "data-make-exit-overlay")
+        self.assertContains(response, "Did you make this recipe?")
+        self.assertContains(response, "data-make-exit-stay")
+        self.assertContains(response, "data-make-exit-back")
+        self.assertContains(response, "Close and keep making")
+        self.assertNotContains(response, "data-make-exit-skip-close")
+        self.assertNotContains(response, "Keep making")
+        self.assertContains(response, "data-make-exit-rating")
+        self.assertContains(response, "star-rating-field")
+        self.assertNotContains(response, "data-make-exit-go-review")
+        self.assertContains(response, "data-make-exit")
+        self.assertContains(response, reverse("recipes:make_record", kwargs={"slug": self.recipe.slug}))
+
+    def test_record_recipe_made_requires_login(self):
+        response = self.client.post(
+            reverse("recipes:make_record", kwargs={"slug": self.recipe.slug}),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response["Location"])
+
+    def test_record_recipe_made_creates_entry(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse("recipes:make_record", kwargs={"slug": self.recipe.slug}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["has_rating"])
+        self.assertIsNone(payload["rating"])
+        made = RecipeMade.objects.get(recipe=self.recipe, user=self.other_user)
+        self.assertIsNotNone(made.made_at)
+
+    def test_record_recipe_made_reports_existing_rating(self):
+        Rating.objects.create(recipe=self.recipe, user=self.other_user, value=4)
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse("recipes:make_record", kwargs={"slug": self.recipe.slug}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        payload = response.json()
+        self.assertTrue(payload["has_rating"])
+        self.assertEqual(payload["rating"], 4)
+
+    def test_detail_prompt_review_from_query(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(
+            f"{self.recipe.get_absolute_url()}?review=1",
+        )
+
+        self.assertContains(response, "data-prompt-review")
+        self.assertContains(response, "is-prompt-review-focus")
 
 
 @override_settings(DEBUG=False)

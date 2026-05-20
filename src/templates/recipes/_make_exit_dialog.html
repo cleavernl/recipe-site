@@ -1,0 +1,63 @@
+<div class="similar-tag-overlay make-exit-overlay" hidden data-make-exit-overlay role="presentation">
+  <div class="similar-tag-overlay-backdrop" data-make-exit-backdrop></div>
+  <div
+    class="similar-tag-modal make-exit-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="make-exit-made-title"
+    tabindex="-1"
+    data-make-exit-dialog
+  >
+    <button
+      type="button"
+      class="make-exit-close"
+      data-make-exit-stay
+      aria-label="Close and keep making"
+    >×</button>
+    <div data-make-exit-step="made">
+      <h2 id="make-exit-made-title">Did you make this recipe?</h2>
+      <p class="similar-tag-modal-lede">Let us know before you leave make mode.</p>
+      <div class="make-exit-actions make-exit-actions--pair">
+        <button type="button" class="button secondary make-exit-action" data-make-exit-not-made>Not this time</button>
+        <button type="button" class="button make-exit-action" data-make-exit-made>Yes, I made it</button>
+      </div>
+    </div>
+    <div hidden data-make-exit-step="review">
+      <div class="make-exit-review-header">
+        <button
+          type="button"
+          class="button secondary icon-only-button make-exit-back"
+          data-make-exit-back
+          hidden
+          aria-label="Back to previous question"
+        >←</button>
+        <div class="make-exit-review-heading">
+          <h2 id="make-exit-review-title">Leave a review?</h2>
+          <p class="similar-tag-modal-lede" data-make-exit-review-lede>Tap a star to rate this recipe.</p>
+        </div>
+      </div>
+      <form
+        class="rating-form star-rating-form make-exit-rating-form"
+        method="post"
+        action="{% url 'recipes:rate' recipe.slug %}"
+        data-make-exit-rating
+      >
+        {% csrf_token %}
+        <div class="star-rating-field make-exit-star-rating" role="radiogroup" aria-label="Recipe rating">
+          {% for radio in rating_form.value %}
+            <span class="star-choice">
+              {{ radio.tag }}
+              <label for="{{ radio.id_for_label }}" title="{{ radio.choice_label }}">
+                <span aria-hidden="true">★</span>
+                <span class="sr-only">{{ radio.choice_label }}</span>
+              </label>
+            </span>
+          {% endfor %}
+        </div>
+      </form>
+      <div class="make-exit-actions make-exit-actions--single">
+        <button type="button" class="button secondary make-exit-action" data-make-exit-skip-review>Not now</button>
+      </div>
+    </div>
+  </div>
+</div>

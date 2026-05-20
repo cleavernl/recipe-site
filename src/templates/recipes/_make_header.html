@@ -1,0 +1,13 @@
+<header class="make-toolbar">
+  <a
+    class="button secondary icon-only-button make-toolbar-back"
+    href="{% url 'recipes:detail' recipe.slug %}"
+    data-make-exit
+    aria-label="Back to recipe"
+  >←</a>
+  <div class="make-toolbar-main">
+    <h1 class="make-toolbar-title">{{ recipe.title }}</h1>
+    <p class="make-phase" data-make-phase aria-current="step">Step {{ make_step }} of 2 · {{ make_step_label }}</p>
+  </div>
+  <a class="button make-toolbar-done" href="{% url 'recipes:detail' recipe.slug %}" data-make-exit>Done</a>
+</header>

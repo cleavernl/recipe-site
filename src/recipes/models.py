@@ -186,6 +186,24 @@ class Comment(models.Model):
         return f"Comment by {self.author} on {self.recipe}"
 
 
+class RecipeMade(models.Model):
+    """A logged cooking session when a user finishes make-it mode."""
+
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="made_records")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="recipe_made_records",
+    )
+    made_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-made_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.user} made {self.recipe} at {self.made_at:%Y-%m-%d %H:%M}"
+
+
 class Rating(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="ratings")
     user = models.ForeignKey(

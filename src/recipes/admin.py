@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from recipes.models import Comment, Ingredient, InstructionStep, Rating, Recipe, RecipePhoto, Tag
+from recipes.models import (
+    Comment,
+    Ingredient,
+    InstructionStep,
+    Rating,
+    Recipe,
+    RecipeMade,
+    RecipePhoto,
+    Tag,
+)
 
 
 class IngredientInline(admin.TabularInline):
@@ -48,3 +57,11 @@ class RatingAdmin(admin.ModelAdmin):
     list_display = ("recipe", "user", "value", "updated_at")
     list_filter = ("value", "updated_at")
     search_fields = ("recipe__title", "user__username")
+
+
+@admin.register(RecipeMade)
+class RecipeMadeAdmin(admin.ModelAdmin):
+    list_display = ("recipe", "user", "made_at")
+    list_filter = ("made_at",)
+    search_fields = ("recipe__title", "user__username")
+    readonly_fields = ("made_at",)

@@ -21,6 +21,9 @@ urlpatterns = [
     path("<slug:slug>/delete/", views.RecipeDeleteView.as_view(), name="delete"),
     path("<slug:slug>/restore/", views.RestoreRecipeView.as_view(), name="restore"),
     path("<slug:slug>/print/", views.RecipePrintView.as_view(), name="print"),
+    path("<slug:slug>/make/", views.RecipeMakeIngredientsView.as_view(), name="make"),
+    path("<slug:slug>/make/steps/", views.RecipeMakeStepsView.as_view(), name="make_steps"),
+    path("<slug:slug>/make/record/", views.record_recipe_made, name="make_record"),
     path("<slug:slug>/comments/", views.AddCommentView.as_view(), name="comment"),
     path("<slug:slug>/rating/", views.rate_recipe, name="rate"),
 ]
