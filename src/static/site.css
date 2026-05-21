@@ -1096,11 +1096,12 @@ select:focus-visible {
 }
 
 .search-tag-chips.tag-overflow-row {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-wrap: nowrap;
   gap: 0.3rem;
   justify-content: flex-start;
   margin: 0;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
 }
@@ -1111,8 +1112,11 @@ select:focus-visible {
 
 .tag-overflow-details {
   flex-shrink: 0;
-  margin-left: auto;
   position: relative;
+}
+
+.tag-overflow.tag-overflow--search .tag-overflow-details {
+  margin-left: 0;
 }
 
 .tag-overflow-summary {
@@ -3043,18 +3047,27 @@ form p {
     width: 100%;
   }
 
-  /* flex: 1 1 12rem fills horizontal space on desktop but grows vertically when stacked */
   [data-recipe-tag-filters-mount],
   [data-recipe-tag-filters-mount] > .search-tag-filters,
   .search-tag-filters,
-  .tag-overflow.tag-overflow--search,
-  .search-tag-chips.tag-overflow-row {
+  .tag-overflow.tag-overflow--search {
     flex: 0 0 auto;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .tag-overflow.tag-overflow--search .tag-overflow-main {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .search-tag-chips.tag-overflow-row {
+    flex: 0 1 auto;
   }
 
   .search-tag-chips {
     justify-content: flex-start;
-    width: 100%;
+    width: auto;
   }
 
   .search-sort-controls {
