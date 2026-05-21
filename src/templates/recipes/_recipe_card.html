@@ -49,6 +49,15 @@
       <dl class="meta-list">
         {% if recipe.total_time_minutes %}<div><dt>Total</dt><dd>{{ recipe.total_time_minutes }} min</dd></div>{% endif %}
         {% if recipe.servings %}<div><dt>Serves</dt><dd>{{ recipe.servings }}</dd></div>{% endif %}
+        {% if recipe.last_made_at %}
+          <div class="meta-list-last-made">
+            <dt>Last made</dt>
+            <dd>
+              {{ recipe.last_made_at|date:"M j" }}
+              {% if recipe.last_made_by_display %} by {{ recipe.last_made_by_display }}{% endif %}
+            </dd>
+          </div>
+        {% endif %}
         <div><dt>Rating</dt><dd>{% if recipe.average_rating %}{{ recipe.average_rating|floatformat:1 }} ★ ({{ recipe.rating_count }}){% else %}New{% endif %}</dd></div>
       </dl>
     </div>

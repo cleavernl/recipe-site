@@ -11,23 +11,44 @@
     <a class="button" href="{% url 'recipes:create' %}">Add a recipe</a>
   </section>
 
-  <section class="search-panel" data-recipe-search-panel>
-    <form
-      class="search"
-      method="get"
-      autocomplete="off"
-      data-recipe-list-search
-      data-recipe-ease-tooltip="Ingredients + steps (fewer is easier)."
-    >
-      <div class="search-panel-header-row">
-        <label class="search-panel-title" for="q">Search recipes</label>
-        <div data-recipe-tag-filters-mount>
-          {% include "recipes/_search_tag_filters.html" %}
-        </div>
-        <div class="search-sort-group">
-          <span id="recipe-sort-heading" class="search-sort-label">Sort by</span>
-          <div class="search-sort-controls">
-            <div class="search-sort-combobox" data-recipe-sort-combobox>
+  {% if recently_made_items %}
+    <section class="recently-made-inline">
+      <div class="section-divider">
+        <span></span>
+        <h2>Recently made</h2>
+        <span></span>
+      </div>
+      <section class="recently-made-grid">
+        {% for item in recently_made_items %}
+          {% include "recipes/_recently_made_card.html" %}
+        {% endfor %}
+      </section>
+    </section>
+  {% endif %}
+
+  <section class="recipe-list-tools" aria-labelledby="recipe-search-heading">
+    <h2 id="recipe-search-heading" class="recipe-search-heading">Search recipes</h2>
+    <div class="search-panel" data-recipe-search-panel>
+      <form
+        class="search search--recipe-list"
+        method="get"
+        autocomplete="off"
+        data-recipe-list-search
+        data-recipe-ease-tooltip="Ingredients + steps (fewer is easier)."
+      >
+        <label class="sr-only" for="q">Search recipes</label>
+        <div class="search-panel-filters-row">
+          <div data-recipe-tag-filters-mount>
+            {% include "recipes/_search_tag_filters.html" %}
+          </div>
+          <div class="search-panel-list-controls" data-recipe-list-controls-mount>
+            {% if filter_makers %}
+              {% include "recipes/_search_made_by_filter.html" %}
+            {% endif %}
+            <div class="search-sort-group">
+              <span id="recipe-sort-heading" class="search-sort-label">Sort by</span>
+              <div class="search-sort-controls">
+                <div class="search-sort-combobox" data-recipe-sort-combobox>
               <input type="hidden" name="sort" value="{{ sort }}" data-recipe-sort-input>
               <button
                 type="button"
@@ -81,9 +102,9 @@
                   </li>
                 {% endfor %}
               </ul>
-            </div>
-            <input type="hidden" name="sort_dir" value="{{ sort_dir }}" data-recipe-sort-dir>
-            <button
+                </div>
+                <input type="hidden" name="sort_dir" value="{{ sort_dir }}" data-recipe-sort-dir>
+                <button
               type="button"
               class="search-sort-dir-button"
               data-recipe-sort-dir-toggle
@@ -102,12 +123,13 @@
                   <path d="M6 2H18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
                 </svg>
               </span>
-            </button>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="search-input-row">
-        <input id="q" type="search" name="q" value="{{ query }}" placeholder="Search title, notes, or ingredients" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="search-input-row">
+          <input id="q" type="search" name="q" value="{{ query }}" placeholder="Search title, notes, or ingredients" autocomplete="off" autocapitalize="off" spellcheck="false">
         <a
           class="hero-nav-link search-pick-link"
           href="{% url 'recipes:random' %}{% if query %}?q={{ query|urlencode }}{% endif %}"
@@ -125,8 +147,9 @@
           </span>
           Pick Something!
         </a>
-      </div>
-    </form>
+        </div>
+      </form>
+    </div>
   </section>
 
   <div data-recipe-list-dynamic aria-live="polite" aria-busy="false">

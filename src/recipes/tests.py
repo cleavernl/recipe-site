@@ -24,7 +24,20 @@ from recipes.models import (
     Tag,
     sync_recipe_tags,
 )
-from recipes.views import RecipeListView, purge_expired_deleted_recipes
+from recipes.views import (
+    RECENTLY_MADE_HOME_LIMIT,
+    RecipeListView,
+    purge_expired_deleted_recipes,
+    recently_made_recipes_for_user,
+)
+
+
+def create_recipe_made(*, recipe: Recipe, user: User, made_at) -> RecipeMade:
+    """RecipeMade.made_at uses auto_now_add; set an explicit timestamp via update."""
+    record = RecipeMade.objects.create(recipe=recipe, user=user)
+    RecipeMade.objects.filter(pk=record.pk).update(made_at=made_at)
+    record.refresh_from_db()
+    return record
 
 
 def tag_formset_post_data(names: list[str]) -> dict[str, str]:
@@ -118,6 +131,126 @@ class RecipeWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("recipes:list"))
         message_text = " ".join(str(m) for m in response.context["messages"])
         self.assertIn("no recipes", message_text.lower())
+
+    def test_recipe_list_shows_recently_made_above_search(self):
+        older = Recipe.objects.create(
+            owner=self.owner,
+            title="Older Made Dish",
+            description="Made first.",
+        )
+        newer = Recipe.objects.create(
+            owner=self.owner,
+            title="Newer Made Dish",
+            description="Made second.",
+        )
+        base = timezone.now()
+        create_recipe_made(recipe=older, user=self.other_user, made_at=base)
+        create_recipe_made(
+            recipe=newer,
+            user=self.other_user,
+            made_at=base + timedelta(hours=1),
+        )
+        create_recipe_made(
+            recipe=self.recipe,
+            user=self.other_user,
+            made_at=base + timedelta(hours=2),
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, "Recently made")
+        self.assertContains(response, "recently-made-card")
+        self.assertContains(response, "Made ")
+        body = response.content.decode()
+        search_index = body.index("data-recipe-search-panel")
+        section = body[:search_index].split("Recently made", 1)[1]
+        self.assertNotIn("meta-list", section)
+        self.assertNotIn("Rating", section)
+        self.assertContains(response, "data-recently-made-review-overlay")
+        self.assertContains(response, "Leave a review")
+        self.assertContains(response, "data-recently-made-review-thanks")
+        self.assertContains(response, "Thank you!")
+        self.assertLess(body.index("Newer Made Dish"), search_index)
+        self.assertLess(body.index("Older Made Dish"), search_index)
+        self.assertLess(body.index("Newer Made Dish"), body.index("Older Made Dish"))
+        self.assertLess(body.index("Sunday Pancakes"), body.index("Newer Made Dish"))
+        made_date = (base + timedelta(hours=2)).strftime("%b")
+        self.assertIn(made_date, section)
+
+    def test_recipe_list_hides_recently_made_when_user_has_none(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertNotContains(response, "Recently made")
+
+    def test_recently_made_hides_review_overlay_when_user_already_rated(self):
+        create_recipe_made(
+            recipe=self.recipe,
+            user=self.other_user,
+            made_at=timezone.now(),
+        )
+        Rating.objects.create(recipe=self.recipe, user=self.other_user, value=4)
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        body = response.content.decode()
+        section = body.split("recently-made-inline", 1)[1].split("data-recipe-search-panel", 1)[0]
+        self.assertNotIn("data-recently-made-review-overlay", section)
+        self.assertNotIn("Leave a review", section)
+
+    def test_recently_made_dedupes_recipe_and_excludes_soft_deleted(self):
+        create_recipe_made(
+            recipe=self.recipe,
+            user=self.other_user,
+            made_at=timezone.now(),
+        )
+        create_recipe_made(
+            recipe=self.recipe,
+            user=self.other_user,
+            made_at=timezone.now() + timedelta(hours=1),
+        )
+        deleted = Recipe.objects.create(
+            owner=self.owner,
+            title="Deleted Made Dish",
+            description="",
+            deleted_at=timezone.now(),
+        )
+        create_recipe_made(recipe=deleted, user=self.other_user, made_at=timezone.now())
+        self.client.force_login(self.other_user)
+
+        recent = recently_made_recipes_for_user(self.other_user)
+
+        self.assertEqual([entry.recipe.pk for entry in recent], [self.recipe.pk])
+
+    def test_recently_made_limits_to_three_recipes(self):
+        base = timezone.now()
+        for index in range(4):
+            recipe = Recipe.objects.create(
+                owner=self.owner,
+                title=f"Made Limit {index}",
+                description="",
+            )
+            create_recipe_made(
+                recipe=recipe,
+                user=self.other_user,
+                made_at=base + timedelta(hours=index),
+            )
+        self.client.force_login(self.other_user)
+
+        recent = recently_made_recipes_for_user(self.other_user)
+
+        self.assertEqual(len(recent), RECENTLY_MADE_HOME_LIMIT)
+        self.assertEqual(recent[0].recipe.title, "Made Limit 3")
+        response = self.client.get(reverse("recipes:list"))
+        body = response.content.decode()
+        section = body.split("recently-made-inline", 1)[1].split("data-recipe-search-panel", 1)[0]
+        self.assertIn("Made Limit 3", section)
+        self.assertIn("Made Limit 2", section)
+        self.assertIn("Made Limit 1", section)
+        self.assertNotIn("Made Limit 0", section)
 
     def test_recipe_list_has_back_to_top_link(self):
         self.client.force_login(self.other_user)
@@ -221,6 +354,93 @@ class RecipeWorkflowTests(TestCase):
         body = response.content.decode()
 
         self.assertLess(body.index("High Rated Pie"), body.index("Low Rated Soup"))
+
+    def test_recipe_list_filters_by_maker(self):
+        other_recipe = Recipe.objects.create(
+            owner=self.owner,
+            title="Only Owner Made",
+            description="",
+        )
+        create_recipe_made(recipe=self.recipe, user=self.other_user, made_at=timezone.now())
+        create_recipe_made(recipe=other_recipe, user=self.owner, made_at=timezone.now())
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(
+            reverse("recipes:list"),
+            {"made_by": str(self.other_user.pk)},
+        )
+        titles = [recipe.title for recipe in response.context["recipes"]]
+
+        self.assertIn("Sunday Pancakes", titles)
+        self.assertNotIn("Only Owner Made", titles)
+
+    def test_recipe_list_shows_maker_filter_dropdown(self):
+        create_recipe_made(recipe=self.recipe, user=self.other_user, made_at=timezone.now())
+        create_recipe_made(recipe=self.recipe, user=self.owner, made_at=timezone.now())
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, "data-recipe-made-by-combobox")
+        self.assertContains(response, "data-recipe-made-by-trigger")
+        self.assertNotContains(response, "data-recipe-made-by-details")
+        self.assertNotContains(response, "search-made-by-chip")
+        self.assertContains(response, "Made by")
+        self.assertContains(response, "Anyone")
+        self.assertContains(response, 'data-value=""')
+        self.assertContains(response, "Sam C.")
+        self.assertContains(response, "Pat B.")
+
+    def test_recipe_list_includes_last_made_sort_option(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, 'data-value="made"')
+        self.assertContains(response, "Last made")
+
+    def test_recipe_list_sorts_by_last_made_newest_first(self):
+        self.client.force_login(self.other_user)
+        base = timezone.now()
+        older = Recipe.objects.create(owner=self.owner, title="Older Made Dish")
+        newer = Recipe.objects.create(owner=self.owner, title="Newer Made Dish")
+        create_recipe_made(recipe=older, user=self.owner, made_at=base)
+        create_recipe_made(
+            recipe=newer,
+            user=self.other_user,
+            made_at=base + timedelta(hours=2),
+        )
+        create_recipe_made(
+            recipe=older,
+            user=self.other_user,
+            made_at=base + timedelta(hours=1),
+        )
+
+        response = self.client.get(reverse("recipes:list"), {"sort": "made"})
+        titles = [recipe.title for recipe in response.context["recipes"]]
+
+        self.assertLess(titles.index("Newer Made Dish"), titles.index("Older Made Dish"))
+        self.assertLess(titles.index("Older Made Dish"), titles.index("Sunday Pancakes"))
+
+    def test_recipe_list_sorts_by_last_made_asc_oldest_first(self):
+        self.client.force_login(self.other_user)
+        base = timezone.now()
+        older = Recipe.objects.create(owner=self.owner, title="Older Made Dish")
+        newer = Recipe.objects.create(owner=self.owner, title="Newer Made Dish")
+        create_recipe_made(recipe=older, user=self.owner, made_at=base)
+        create_recipe_made(
+            recipe=newer,
+            user=self.other_user,
+            made_at=base + timedelta(hours=1),
+        )
+
+        response = self.client.get(
+            reverse("recipes:list"),
+            {"sort": "made", "sort_dir": "asc"},
+        )
+        titles = [recipe.title for recipe in response.context["recipes"]]
+
+        self.assertLess(titles.index("Older Made Dish"), titles.index("Newer Made Dish"))
 
     def test_recipe_list_sorts_by_ease_fewer_work_first(self):
         self.client.force_login(self.other_user)
@@ -887,6 +1107,73 @@ class RecipeWorkflowTests(TestCase):
             },
         )
         self.assertEqual(Rating.objects.get(recipe=self.recipe, user=self.other_user).value, 4)
+
+    def test_ajax_rating_accepts_prefixed_value_field(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse("recipes:rate", kwargs={"slug": self.recipe.slug}),
+            {f"recent-{self.recipe.pk}-value": "3"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(Rating.objects.get(recipe=self.recipe, user=self.other_user).value, 3)
+
+    def test_ajax_clear_rating_removes_user_rating(self):
+        Rating.objects.create(recipe=self.recipe, user=self.other_user, value=4)
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse("recipes:rate", kwargs={"slug": self.recipe.slug}),
+            {"clear": "1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Rating.objects.filter(recipe=self.recipe, user=self.other_user).exists())
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertIsNone(payload["rating"])
+        self.assertTrue(payload["cleared"])
+        self.assertEqual(payload["message"], "Rating removed.")
+        self.assertIsNone(payload["average"])
+        self.assertEqual(payload["count"], 0)
+
+    def test_ajax_clear_rating_when_none_exists_is_ok(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse("recipes:rate", kwargs={"slug": self.recipe.slug}),
+            {"clear": "1"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["message"], "No rating to remove.")
+
+    def test_recipe_list_tile_shows_last_made(self):
+        create_recipe_made(
+            recipe=self.recipe,
+            user=self.other_user,
+            made_at=timezone.now(),
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+        grid = response.content.decode().split("data-recipe-list-grid>", 1)[1]
+
+        self.assertIn("<dt>Last made</dt>", grid)
+        self.assertIn("by Sam C.", grid)
+
+    def test_recipe_list_tile_hides_last_made_when_never_made(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+        grid = response.content.decode().split("data-recipe-list-grid>", 1)[1]
+
+        self.assertNotIn("<dt>Last made</dt>", grid)
 
     def test_recipe_list_tile_shows_average_rating(self):
         Rating.objects.create(recipe=self.recipe, user=self.owner, value=4)

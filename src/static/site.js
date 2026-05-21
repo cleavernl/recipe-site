@@ -125,31 +125,100 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  const submitStarRating = async (form, { clear = false } = {}) => {
+    const body = new FormData(form);
+    if (clear) {
+      body.set("clear", "1");
+      for (const key of [...body.keys()]) {
+        if (key === "value" || key.endsWith("-value")) {
+          body.delete(key);
+        }
+      }
+    }
+    const response = await fetch(form.action.split("#")[0], {
+      method: "POST",
+      body,
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      credentials: "same-origin",
+    });
+    const payload = await response.json();
+    return { payload, response };
+  };
+
+  const starChoiceForEvent = (form, target) => {
+    if (!(target instanceof Element)) {
+      return null;
+    }
+    const choice = target.closest(".star-choice");
+    if (!(choice instanceof HTMLElement) || choice.closest("form") !== form) {
+      return null;
+    }
+    return choice;
+  };
+
   const bindStarRatingForm = (form, { onSaved } = {}) => {
     if (!(form instanceof HTMLFormElement)) {
       return;
     }
     updateStars(form);
-    form.querySelectorAll("input[type='radio']").forEach((input) => {
-      input.addEventListener("change", async () => {
+
+    form.addEventListener("mousedown", (event) => {
+      const choice = starChoiceForEvent(form, event.target);
+      const input = choice?.querySelector("input[type='radio']");
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+      input.dataset.priorChecked = input.checked ? "1" : "0";
+    });
+
+    form.addEventListener(
+      "click",
+      async (event) => {
+        const choice = starChoiceForEvent(form, event.target);
+        const input = choice?.querySelector("input[type='radio']");
+        if (!(input instanceof HTMLInputElement) || input.dataset.priorChecked !== "1") {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        form.dataset.suppressRatingChange = "1";
+        form.querySelectorAll("input[type='radio']").forEach((radio) => {
+          radio.checked = false;
+        });
         updateStars(form);
         try {
-          const response = await fetch(form.action.split("#")[0], {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-              "X-Requested-With": "XMLHttpRequest",
-            },
-            credentials: "same-origin",
-          });
-          const payload = await response.json();
+          const { payload, response } = await submitStarRating(form, { clear: true });
           if (onSaved) {
             onSaved(payload, response);
           }
         } catch {
-          showToast("Rating could not be saved. Please try again.", "error");
+          showToast("Rating could not be removed. Please try again.", "error");
+        } finally {
+          delete form.dataset.suppressRatingChange;
         }
-      });
+      },
+      true,
+    );
+
+    form.addEventListener("change", async (event) => {
+      if (form.dataset.suppressRatingChange === "1") {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.type !== "radio" || target.form !== form) {
+        return;
+      }
+      updateStars(form);
+      try {
+        const { payload, response } = await submitStarRating(form);
+        if (onSaved) {
+          onSaved(payload, response);
+        }
+      } catch {
+        showToast("Rating could not be saved. Please try again.", "error");
+      }
     });
   };
 
@@ -444,8 +513,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const checked = exitRatingForm?.querySelector("input[type='radio']:checked");
       exitReviewLede.textContent = checked
-        ? "Update your rating or skip for now."
-        : "Tap a star to rate this recipe.";
+        ? "Tap your score again to remove it, or skip for now."
+        : "Tap a star to rate. Tap your score again to remove it.";
     };
 
     const recordMadeIfPending = async () => {
@@ -1377,6 +1446,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         details.hidden = false;
 
+        if (row.scrollWidth <= row.clientWidth + 1) {
+          syncCountAndLabel(0);
+          return;
+        }
+
         let guard = 0;
         while (row.scrollWidth > row.clientWidth + 1 && row.children.length > 0 && guard < 240) {
           const widthBefore = row.scrollWidth;
@@ -1444,6 +1518,18 @@ document.addEventListener("DOMContentLoaded", () => {
       liveSearchForm.querySelector("[data-recipe-tag-hidden-inputs]");
     const getTagFiltersMount = () =>
       liveSearchForm.querySelector("[data-recipe-tag-filters-mount]");
+    const getMadeByInput = () =>
+      liveSearchForm.querySelector("[data-recipe-made-by-input]");
+    const getMadeByCombobox = () =>
+      liveSearchForm.querySelector("[data-recipe-made-by-combobox]");
+    const getMadeByTrigger = () =>
+      liveSearchForm.querySelector("[data-recipe-made-by-trigger]");
+    const getMadeByListbox = () =>
+      liveSearchForm.querySelector("[data-recipe-made-by-listbox]");
+    const getMadeByTriggerLabel = () =>
+      liveSearchForm.querySelector("[data-recipe-made-by-trigger-label]");
+    const getListControlsMount = () =>
+      liveSearchForm.querySelector("[data-recipe-list-controls-mount]");
     const sortTitle = "title";
     const defaultSortDir = {
       title: "asc",
@@ -1452,6 +1538,7 @@ document.addEventListener("DOMContentLoaded", () => {
       prep_time: "asc",
       ease: "asc",
       updated: "desc",
+      made: "desc",
     };
 
     const sortLabels = {
@@ -1461,6 +1548,7 @@ document.addEventListener("DOMContentLoaded", () => {
       prep_time: "Prep time",
       ease: "Ease",
       updated: "Updated",
+      made: "Last made",
     };
     const validSortValues = new Set(Object.keys(defaultSortDir));
 
@@ -1533,10 +1621,63 @@ document.addEventListener("DOMContentLoaded", () => {
       sortTrigger?.setAttribute("aria-expanded", "false");
     };
 
+    const getMadeByOptions = () => {
+      const listbox = getMadeByListbox();
+      return listbox ? [...listbox.querySelectorAll('[role="option"]')] : [];
+    };
+
+    const syncMadeByTriggerLabel = () => {
+      const labelEl = getMadeByTriggerLabel();
+      const madeByInput = getMadeByInput();
+      if (!(labelEl instanceof HTMLElement) || !(madeByInput instanceof HTMLInputElement)) {
+        return;
+      }
+      const value = madeByInput.value.trim();
+      const selected = getMadeByOptions().find(
+        (opt) => (opt.getAttribute("data-value") || "") === value,
+      );
+      labelEl.textContent = selected?.getAttribute("data-label") || "Anyone";
+    };
+
+    const syncMadeByListboxAriaSelected = () => {
+      const madeByInput = getMadeByInput();
+      const value = madeByInput instanceof HTMLInputElement ? madeByInput.value.trim() : "";
+      getMadeByOptions().forEach((opt) => {
+        const isSelected = (opt.getAttribute("data-value") || "") === value;
+        opt.setAttribute("aria-selected", isSelected ? "true" : "false");
+      });
+    };
+
+    const closeMadeByListbox = () => {
+      const listbox = getMadeByListbox();
+      const combobox = getMadeByCombobox();
+      const trigger = getMadeByTrigger();
+      if (!(listbox instanceof HTMLElement)) {
+        return;
+      }
+      listbox.hidden = true;
+      combobox?.classList.remove("is-open");
+      trigger?.setAttribute("aria-expanded", "false");
+    };
+
+    const openMadeByListbox = () => {
+      const listbox = getMadeByListbox();
+      const combobox = getMadeByCombobox();
+      const trigger = getMadeByTrigger();
+      if (!(listbox instanceof HTMLElement)) {
+        return;
+      }
+      closeSortListbox();
+      listbox.hidden = false;
+      combobox?.classList.add("is-open");
+      trigger?.setAttribute("aria-expanded", "true");
+    };
+
     const openSortListbox = () => {
       if (!(sortListbox instanceof HTMLElement)) {
         return;
       }
+      closeMadeByListbox();
       sortListbox.hidden = false;
       sortCombobox?.classList.add("is-open");
       sortTrigger?.setAttribute("aria-expanded", "true");
@@ -1569,6 +1710,34 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       };
 
+      const getMadeByValue = () => {
+        const madeByInput = getMadeByInput();
+        if (!(madeByInput instanceof HTMLInputElement)) {
+          return "";
+        }
+        return madeByInput.value.trim();
+      };
+
+      const selectMadeByValue = (nextValue) => {
+        const madeByInput = getMadeByInput();
+        if (!(madeByInput instanceof HTMLInputElement)) {
+          return;
+        }
+        const normalized = String(nextValue ?? "").trim();
+        const allowed = new Set(
+          getMadeByOptions().map((opt) => opt.getAttribute("data-value") || ""),
+        );
+        if (!allowed.has(normalized)) {
+          return;
+        }
+        madeByInput.value = normalized;
+        syncMadeByTriggerLabel();
+        syncMadeByListboxAriaSelected();
+        closeMadeByListbox();
+        void runLiveSearch();
+        getMadeByTrigger()?.focus();
+      };
+
       const captureListStateFromForm = () => {
         const tags = [];
         getTagHiddenRoot()?.querySelectorAll("input[name='tag']").forEach((el) => {
@@ -1581,6 +1750,7 @@ document.addEventListener("DOMContentLoaded", () => {
           sort: getSortValue(),
           sort_dir: getSortDirValue(),
           tags,
+          made_by: getMadeByValue(),
         };
       };
 
@@ -1611,6 +1781,10 @@ document.addEventListener("DOMContentLoaded", () => {
             params.append("tag", slug);
           }
         });
+        const madeBy = (state.made_by || "").trim();
+        if (madeBy) {
+          params.set("made_by", madeBy);
+        }
         const search = params.toString();
         return `${window.location.pathname}${search ? `?${search}` : ""}`;
       };
@@ -1624,6 +1798,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const hasSort =
           current.searchParams.has("sort") || current.searchParams.has("sort_dir");
         const hasTags = current.searchParams.has("tag");
+        const hasMadeBy = current.searchParams.has("made_by");
         const hasQ = current.searchParams.has("q");
 
         const urlSortRaw = current.searchParams.get("sort") || sortTitle;
@@ -1649,6 +1824,9 @@ document.addEventListener("DOMContentLoaded", () => {
             : Array.isArray(stored.tags)
               ? stored.tags.filter(Boolean)
               : [],
+          made_by: hasMadeBy
+            ? (current.searchParams.get("made_by") || "").trim()
+            : (stored.made_by || "").trim(),
         };
 
         const target = listUrlFromState(merged);
@@ -1681,11 +1859,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (q) {
           params.set("q", q);
         }
-        liveSearchForm.querySelectorAll("[data-recipe-tag-hidden-inputs] input[name='tag']").forEach((el) => {
-          if (el instanceof HTMLInputElement && el.value) {
-            params.append("tag", el.value);
-          }
-        });
+        appendSelectedTagsToParams(params);
+        appendMadeByToParams(params);
         randomPick.href = params.toString() ? `${base}?${params.toString()}` : base;
       };
 
@@ -1695,6 +1870,13 @@ document.addEventListener("DOMContentLoaded", () => {
             params.append("tag", el.value);
           }
         });
+      };
+
+      const appendMadeByToParams = (params) => {
+        const madeBy = getMadeByValue();
+        if (madeBy) {
+          params.set("made_by", madeBy);
+        }
       };
 
       const appendSelectedTagsToUrl = (url) => {
@@ -1720,6 +1902,7 @@ document.addEventListener("DOMContentLoaded", () => {
           params.set("sort_dir", dir);
         }
         appendSelectedTagsToParams(params);
+        appendMadeByToParams(params);
       };
 
       const applySortToUrl = (url) => {
@@ -1739,27 +1922,50 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
         appendSelectedTagsToUrl(url);
+        const madeBy = getMadeByValue();
+        if (madeBy) {
+          url.searchParams.set("made_by", madeBy);
+        } else {
+          url.searchParams.delete("made_by");
+        }
       };
 
-      const syncTagFiltersFromPartialHtml = (html) => {
-        const mount = getTagFiltersMount();
-        if (!(mount instanceof HTMLElement)) {
-          return;
-        }
+      const syncListFiltersFromPartialHtml = (html) => {
         const parsed = new DOMParser().parseFromString(html, "text/html");
         const extras = parsed.querySelector("[data-recipe-list-sync-extras]");
         if (!(extras instanceof HTMLElement)) {
           return;
         }
-        const next = extras.querySelector("[data-recipe-tag-filters]");
-        const cur = mount.querySelector("[data-recipe-tag-filters]");
-        if (!(next instanceof HTMLElement)) {
-          return;
+        const tagMount = getTagFiltersMount();
+        const nextTags = extras.querySelector("[data-recipe-tag-filters]");
+        if (tagMount instanceof HTMLElement && nextTags instanceof HTMLElement) {
+          const curTags = tagMount.querySelector("[data-recipe-tag-filters]");
+          if (curTags instanceof HTMLElement) {
+            curTags.replaceWith(nextTags.cloneNode(true));
+          } else {
+            tagMount.append(nextTags.cloneNode(true));
+          }
         }
-        if (cur instanceof HTMLElement) {
-          cur.replaceWith(next.cloneNode(true));
-        } else {
-          mount.append(next.cloneNode(true));
+        const listControlsMount = getListControlsMount();
+        const nextMadeByGroup = extras.querySelector("[data-recipe-made-by-group]");
+        if (listControlsMount instanceof HTMLElement) {
+          const curMadeByGroup = listControlsMount.querySelector("[data-recipe-made-by-group]");
+          if (nextMadeByGroup instanceof HTMLElement) {
+            if (curMadeByGroup instanceof HTMLElement) {
+              curMadeByGroup.replaceWith(nextMadeByGroup.cloneNode(true));
+            } else {
+              const sortGroup = listControlsMount.querySelector(".search-sort-group");
+              if (sortGroup instanceof HTMLElement) {
+                listControlsMount.insertBefore(nextMadeByGroup.cloneNode(true), sortGroup);
+              } else {
+                listControlsMount.append(nextMadeByGroup.cloneNode(true));
+              }
+            }
+            syncMadeByTriggerLabel();
+            syncMadeByListboxAriaSelected();
+          } else if (curMadeByGroup instanceof HTMLElement) {
+            curMadeByGroup.remove();
+          }
         }
         initTagOverflow(liveSearchForm);
       };
@@ -1919,7 +2125,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           liveSearchDynamic.innerHTML = html;
-          syncTagFiltersFromPartialHtml(html);
+          syncListFiltersFromPartialHtml(html);
           initRecipeCarousels(liveSearchDynamic);
           initTagOverflow(liveSearchDynamic);
           observeRecipeListSentinel();
@@ -1977,6 +2183,8 @@ document.addEventListener("DOMContentLoaded", () => {
       syncTriggerLabel();
       syncListboxAriaSelected();
       syncEaseTriggerTitle();
+      syncMadeByTriggerLabel();
+      syncMadeByListboxAriaSelected();
 
       input.addEventListener("input", () => {
         syncRandomPickHref();
@@ -1985,6 +2193,31 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       liveSearchForm.addEventListener("click", (event) => {
+        const madeByTrigger =
+          event.target instanceof Element ? event.target.closest("[data-recipe-made-by-trigger]") : null;
+        if (madeByTrigger instanceof HTMLButtonElement) {
+          event.stopPropagation();
+          const madeByListbox = getMadeByListbox();
+          if (madeByListbox instanceof HTMLElement) {
+            if (madeByListbox.hidden) {
+              openMadeByListbox();
+            } else {
+              closeMadeByListbox();
+            }
+          }
+          return;
+        }
+
+        const madeByOption =
+          event.target instanceof Element
+            ? event.target.closest("[data-recipe-made-by-listbox] [data-value]")
+            : null;
+        if (madeByOption instanceof HTMLElement) {
+          event.preventDefault();
+          selectMadeByValue(madeByOption.getAttribute("data-value") || "");
+          return;
+        }
+
         const inFilters = event.target instanceof Element && event.target.closest("[data-recipe-tag-filters]");
         if (!inFilters) {
           return;
@@ -2108,20 +2341,101 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const onDocumentPointerDown = (event) => {
-          if (sortListbox.hidden) {
-            return;
-          }
           const target = event.target;
           if (!(target instanceof Node)) {
             return;
           }
-          if (sortCombobox.contains(target)) {
-            return;
+          if (
+            !sortListbox.hidden &&
+            sortCombobox instanceof HTMLElement &&
+            !sortCombobox.contains(target)
+          ) {
+            closeSortListbox();
           }
-          closeSortListbox();
+          const madeByCombobox = getMadeByCombobox();
+          const madeByListbox = getMadeByListbox();
+          if (
+            madeByListbox instanceof HTMLElement &&
+            !madeByListbox.hidden &&
+            madeByCombobox instanceof HTMLElement &&
+            !madeByCombobox.contains(target)
+          ) {
+            closeMadeByListbox();
+          }
         };
         document.addEventListener("pointerdown", onDocumentPointerDown, true);
       }
+
+      liveSearchForm.addEventListener("keydown", (event) => {
+        const madeByTrigger = getMadeByTrigger();
+        const madeByListbox = getMadeByListbox();
+        if (!(madeByListbox instanceof HTMLElement)) {
+          return;
+        }
+        if (event.target === madeByTrigger && madeByTrigger instanceof HTMLButtonElement) {
+          if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            if (madeByListbox.hidden) {
+              openMadeByListbox();
+            } else {
+              closeMadeByListbox();
+            }
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            if (madeByListbox.hidden) {
+              openMadeByListbox();
+            }
+            getMadeByOptions()[0]?.focus();
+            return;
+          }
+          if (event.key === "Escape" && !madeByListbox.hidden) {
+            event.preventDefault();
+            closeMadeByListbox();
+            madeByTrigger.focus();
+          }
+          return;
+        }
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement) || !madeByListbox.contains(active)) {
+          return;
+        }
+        const options = getMadeByOptions();
+        let index = options.indexOf(active);
+        if (index < 0) {
+          index = 0;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeMadeByListbox();
+          madeByTrigger?.focus();
+          return;
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          const next = Math.min(index + 1, options.length - 1);
+          options[next]?.focus();
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          if (index <= 0) {
+            closeMadeByListbox();
+            madeByTrigger?.focus();
+            return;
+          }
+          options[index - 1]?.focus();
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          const current = options[index];
+          if (current instanceof HTMLElement) {
+            selectMadeByValue(current.getAttribute("data-value") || "");
+          }
+        }
+      });
 
       if (sortDirToggle instanceof HTMLButtonElement && sortDirInput instanceof HTMLInputElement) {
         sortDirToggle.addEventListener("click", () => {
@@ -2192,11 +2506,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (breakdownList) {
       const selector = `[data-rating-user-id="${payload.user_id}"]`;
-      let item = breakdownList.querySelector(selector);
-      if (!item) {
-        item = document.createElement("li");
-        item.dataset.ratingUserId = String(payload.user_id);
-        item.innerHTML = `
+      const item = breakdownList.querySelector(selector);
+      if (payload.rating == null) {
+        item?.remove();
+        if (breakdownList.children.length === 0) {
+          breakdownList.remove();
+          if (breakdown && !empty) {
+            const emptyMessage = document.createElement("p");
+            emptyMessage.dataset.ratingEmpty = "";
+            emptyMessage.textContent = "No one has rated this recipe yet.";
+            breakdown.append(emptyMessage);
+          } else if (empty instanceof HTMLElement) {
+            empty.hidden = false;
+          }
+        }
+        return;
+      }
+      let row = item;
+      if (!row) {
+        row = document.createElement("li");
+        row.dataset.ratingUserId = String(payload.user_id);
+        row.innerHTML = `
           <span data-rating-reviewer-name></span>
           <strong class="star-meter reviewer-stars">
             <span class="star-meter-empty" aria-hidden="true">★★★★★</span>
@@ -2204,15 +2534,15 @@ document.addEventListener("DOMContentLoaded", () => {
           </strong>
         `;
       }
-      breakdownList.prepend(item);
-      let reviewerName = item.querySelector("[data-rating-reviewer-name]");
+      breakdownList.prepend(row);
+      let reviewerName = row.querySelector("[data-rating-reviewer-name]");
       if (!reviewerName) {
-        reviewerName = item.querySelector("span") || document.createElement("span");
+        reviewerName = row.querySelector("span") || document.createElement("span");
         reviewerName.dataset.ratingReviewerName = "";
-        item.prepend(reviewerName);
+        row.prepend(reviewerName);
       }
       updateReviewerName(reviewerName, payload);
-      const stars = item.querySelector("strong");
+      const stars = row.querySelector("strong");
       stars.style.setProperty("--rating-percent", `${payload.rating * 20}%`);
       stars.setAttribute("aria-label", `${payload.rating} out of 5 stars`);
     }
@@ -2445,12 +2775,57 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  document.querySelectorAll(".star-rating-form:not([data-make-exit-rating])").forEach((form) => {
+  const RECENTLY_MADE_THANKS_MS = 1400;
+  const RECENTLY_MADE_OVERLAY_FADE_MS = 280;
+
+  const showRecentlyMadeThankYouAndDismiss = (overlay) => {
+    const panel = overlay.querySelector("[data-recently-made-review-panel]");
+    const thanks = overlay.querySelector("[data-recently-made-review-thanks]");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const thanksMs = reducedMotion ? 400 : RECENTLY_MADE_THANKS_MS;
+    const fadeMs = reducedMotion ? 0 : RECENTLY_MADE_OVERLAY_FADE_MS;
+
+    overlay.classList.add("is-thanks");
+    if (panel instanceof HTMLElement) {
+      panel.setAttribute("aria-hidden", "true");
+    }
+    if (thanks instanceof HTMLElement) {
+      thanks.hidden = false;
+      thanks.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(() => {
+        overlay.classList.add("is-thanks-visible");
+      });
+    }
+
+    window.setTimeout(() => {
+      overlay.classList.add("is-dismissed");
+      window.setTimeout(() => {
+        overlay.remove();
+      }, fadeMs);
+    }, thanksMs);
+  };
+
+  document.querySelectorAll("[data-recently-made-rating]").forEach((form) => {
     bindStarRatingForm(form, {
       onSaved: (payload, response) => {
-        updateRatingDisplay(payload);
+        const overlay = form.closest("[data-recently-made-review-overlay]");
+        if (payload.ok && !payload.cleared && overlay instanceof HTMLElement) {
+          showRecentlyMadeThankYouAndDismiss(overlay);
+          return;
+        }
         showToast(payload.message, response.ok && payload.ok ? "success" : "error");
       },
     });
   });
+
+  document
+    .querySelectorAll(".star-rating-form:not([data-make-exit-rating]):not([data-recently-made-rating])")
+    .forEach((form) => {
+      bindStarRatingForm(form, {
+        onSaved: (payload, response) => {
+          updateRatingDisplay(payload);
+          showToast(payload.message, response.ok && payload.ok ? "success" : "error");
+        },
+      });
+    });
 });

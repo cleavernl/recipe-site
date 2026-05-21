@@ -1,0 +1,50 @@
+<article class="recently-made-card">
+  <div class="recently-made-card-media-wrap">
+    {% if item.recipe.photo or item.recipe.photos.first %}
+      <div class="recently-made-card-media">
+        {% if item.recipe.photo %}
+          <img src="{{ item.recipe.photo.url }}" alt="">
+        {% else %}
+          <img src="{{ item.recipe.photos.first.image.url }}" alt="{{ item.recipe.photos.first.caption }}" loading="lazy" decoding="async">
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="recently-made-card-media recently-made-card-media-empty"><span>No photo</span></div>
+    {% endif %}
+    {% if item.rating_form %}
+      <div class="recently-made-review-overlay" data-recently-made-review-overlay>
+        <div class="recently-made-review-panel" data-recently-made-review-panel>
+          <p class="recently-made-review-prompt">Leave a review</p>
+          <form
+            class="rating-form star-rating-form recently-made-rating-form"
+            method="post"
+            action="{% url 'recipes:rate' item.recipe.slug %}"
+            data-recently-made-rating
+          >
+            {% csrf_token %}
+            <div class="star-rating-field recently-made-star-rating" role="radiogroup" aria-label="Rate {{ item.recipe.title }}">
+              {% for radio in item.rating_form.value %}
+                <span class="star-choice">
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}" title="{{ radio.choice_label }}">
+                    <span aria-hidden="true">★</span>
+                    <span class="sr-only">{{ radio.choice_label }}</span>
+                  </label>
+                </span>
+              {% endfor %}
+            </div>
+          </form>
+        </div>
+        <p class="recently-made-review-thanks" data-recently-made-review-thanks hidden>Thank you!</p>
+      </div>
+    {% endif %}
+  </div>
+  <a class="recently-made-card-link" href="{{ item.recipe.get_absolute_url }}" aria-label="View {{ item.recipe.title }}">
+    <div class="recently-made-card-body">
+      <h3>{{ item.recipe.title }}</h3>
+      <p class="recently-made-card-date">
+        <time datetime="{{ item.made_at|date:'c' }}">Made {{ item.made_at|date:"M j" }}</time>
+      </p>
+    </div>
+  </a>
+</article>

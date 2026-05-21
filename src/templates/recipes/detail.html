@@ -182,7 +182,7 @@
         <section class="rating-card{% if prompt_review %} is-prompt-review-focus{% endif %}">
           <div class="rating-section-header">
             <h3>Your rating</h3>
-            <p>Tap a star to update your score.</p>
+            <p>Tap a star to rate. Tap your score again to remove it.</p>
           </div>
           <form class="rating-form star-rating-form" method="post" action="{% url 'recipes:rate' recipe.slug %}#discussion">
             {% csrf_token %}

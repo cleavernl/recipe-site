@@ -1,0 +1,65 @@
+<div class="search-made-by-group" data-recipe-made-by-group>
+  <span id="recipe-made-by-heading" class="search-sort-label">Made by</span>
+  <div class="search-sort-controls">
+    <div class="search-sort-combobox search-made-by-combobox" data-recipe-made-by-combobox>
+      <input
+        type="hidden"
+        name="made_by"
+        value="{% if list_made_by_user_id %}{{ list_made_by_user_id }}{% endif %}"
+        data-recipe-made-by-input
+      >
+      <button
+        type="button"
+        id="recipe-made-by-trigger"
+        class="search-sort-trigger"
+        data-recipe-made-by-trigger
+        aria-haspopup="listbox"
+        aria-expanded="false"
+        aria-controls="recipe-made-by-listbox"
+        aria-labelledby="recipe-made-by-heading recipe-made-by-trigger-label"
+      >
+        <span id="recipe-made-by-trigger-label" class="search-sort-trigger-text" data-recipe-made-by-trigger-label>
+          {% if list_made_by_display %}{{ list_made_by_display }}{% else %}Anyone{% endif %}
+        </span>
+        <svg class="search-sort-trigger-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+      <ul
+        id="recipe-made-by-listbox"
+        class="search-sort-listbox"
+        role="listbox"
+        hidden
+        data-recipe-made-by-listbox
+        aria-labelledby="recipe-made-by-heading"
+      >
+        <li
+          class="search-sort-option"
+          role="option"
+          tabindex="-1"
+          data-value=""
+          data-label="Anyone"
+          aria-selected="{% if not list_made_by_user_id %}true{% else %}false{% endif %}"
+        >
+          <span class="search-sort-option-row">
+            <span class="search-sort-option-label">Anyone</span>
+          </span>
+        </li>
+        {% for maker in filter_makers %}
+          <li
+            class="search-sort-option"
+            role="option"
+            tabindex="-1"
+            data-value="{{ maker.id }}"
+            data-label="{{ maker.display_name }}"
+            aria-selected="{% if maker.id == list_made_by_user_id %}true{% else %}false{% endif %}"
+          >
+            <span class="search-sort-option-row">
+              <span class="search-sort-option-label">{{ maker.display_name }} ({{ maker.recipe_count }})</span>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>

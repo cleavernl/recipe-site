@@ -3,15 +3,17 @@ from __future__ import annotations
 import random
 import re
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import NamedTuple
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Avg, Count, Exists, ExpressionWrapper, F, IntegerField, OuterRef, Q
+from django.db.models import Avg, Count, Exists, ExpressionWrapper, F, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -73,6 +75,17 @@ def display_user_name(user) -> str:
     return user.username
 
 
+def rating_form_post_data(post) -> dict:
+    """Normalize POST data so RatingForm always receives a ``value`` field."""
+    data = post.copy()
+    if "value" not in data:
+        for key in post:
+            if key.endswith("-value"):
+                data["value"] = post.get(key)
+                break
+    return data
+
+
 def rating_payload(recipe: Recipe, user) -> dict:
     aggregate = recipe.ratings.aggregate(average=Avg("value"), count=Count("id"))
     average = aggregate["average"]
@@ -104,6 +117,7 @@ SORT_COOK_TIME = "cook_time"
 SORT_PREP_TIME = "prep_time"
 SORT_EASE = "ease"
 SORT_UPDATED = "updated"
+SORT_MADE = "made"
 
 RECIPE_LIST_SORTS = frozenset(
     {
@@ -113,6 +127,7 @@ RECIPE_LIST_SORTS = frozenset(
         SORT_PREP_TIME,
         SORT_EASE,
         SORT_UPDATED,
+        SORT_MADE,
     }
 )
 
@@ -123,6 +138,7 @@ DEFAULT_RECIPE_LIST_SORT_DIR: dict[str, str] = {
     SORT_PREP_TIME: "asc",
     SORT_EASE: "asc",
     SORT_UPDATED: "desc",
+    SORT_MADE: "desc",
 }
 
 RECIPE_LIST_SORT_OPTIONS: tuple[tuple[str, str], ...] = (
@@ -132,11 +148,27 @@ RECIPE_LIST_SORT_OPTIONS: tuple[tuple[str, str], ...] = (
     (SORT_PREP_TIME, "Prep time"),
     (SORT_EASE, "Ease"),
     (SORT_UPDATED, "Updated"),
+    (SORT_MADE, "Last made"),
 )
 
 RECIPE_LIST_SORT_LABELS = dict(RECIPE_LIST_SORT_OPTIONS)
 
 LIST_TAG_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+
+RECENTLY_MADE_HOME_LIMIT = 3
+
+
+class RecentlyMadeItem(NamedTuple):
+    recipe: Recipe
+    made_at: datetime
+    user_rating: int | None
+    rating_form: RatingForm | None
+
+
+class RecipeListMakerFilter(NamedTuple):
+    id: int
+    display_name: str
+    recipe_count: int
 
 
 def normalized_recipe_list_tag_slugs(request) -> list[str]:
@@ -155,11 +187,23 @@ def normalized_recipe_list_tag_slugs(request) -> list[str]:
     return [slug for slug in ordered if slug in valid]
 
 
+def normalize_recipe_list_made_by(request) -> int | None:
+    """Return a validated user id from ``made_by``, or None for any maker."""
+    raw = request.GET.get("made_by", "").strip()
+    if not raw.isdigit():
+        return None
+    user_id = int(raw)
+    if user_id <= 0:
+        return None
+    return user_id
+
+
 def build_recipe_list_query_pairs(
     query: str,
     tag_slugs: list[str],
     sort: str,
     sort_dir: str,
+    made_by_user_id: int | None = None,
 ) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     stripped = query.strip()
@@ -167,6 +211,8 @@ def build_recipe_list_query_pairs(
         pairs.append(("q", stripped))
     for slug in tag_slugs:
         pairs.append(("tag", slug))
+    if made_by_user_id:
+        pairs.append(("made_by", str(made_by_user_id)))
     default_dir = DEFAULT_RECIPE_LIST_SORT_DIR[sort]
     title_default_dir = DEFAULT_RECIPE_LIST_SORT_DIR[SORT_TITLE]
     omit_sort_params = sort == SORT_TITLE and sort_dir == title_default_dir
@@ -189,14 +235,50 @@ def normalize_recipe_list_sort_dir(request, sort_key: str) -> str:
     return DEFAULT_RECIPE_LIST_SORT_DIR.get(sort_key, "asc")
 
 
-def filtered_active_recipe_queryset(search_text: str, tag_slugs: list[str] | None = None):
-    """Active recipes optionally filtered by search text and/or tags (AND)."""
-    queryset = (
+def annotate_recipe_last_made(queryset):
+    """Latest make-it session per recipe (any user), for list tiles and sorting."""
+    latest_made = RecipeMade.objects.filter(recipe_id=OuterRef("pk")).order_by("-made_at", "-id")
+    return queryset.annotate(
+        last_made_at=Subquery(latest_made.values("made_at")[:1]),
+        last_made_by_id=Subquery(latest_made.values("user_id")[:1]),
+    )
+
+
+def attach_last_made_display(recipes) -> None:
+    """Set ``last_made_by_display`` on recipe instances that have ``last_made_at``."""
+    if hasattr(recipes, "object_list"):
+        items = recipes.object_list
+    else:
+        items = list(recipes)
+    if not items:
+        return
+    user_ids = {
+        recipe.last_made_by_id
+        for recipe in items
+        if getattr(recipe, "last_made_at", None) and getattr(recipe, "last_made_by_id", None)
+    }
+    users_by_id = get_user_model().objects.in_bulk(user_ids) if user_ids else {}
+    for recipe in items:
+        if not getattr(recipe, "last_made_at", None):
+            recipe.last_made_by_display = None
+            continue
+        maker = users_by_id.get(recipe.last_made_by_id)
+        recipe.last_made_by_display = display_user_name(maker) if maker else None
+
+
+def filtered_active_recipe_queryset(
+    search_text: str,
+    tag_slugs: list[str] | None = None,
+    *,
+    made_by_user_id: int | None = None,
+):
+    """Active recipes optionally filtered by search text, tags (AND), and/or maker."""
+    queryset = annotate_recipe_last_made(
         active_recipes()
         .select_related("owner")
         .prefetch_related("ingredients", "photos", "tags")
         .annotate(average_rating=Avg("ratings__value"))
-        .annotate(rating_count=Count("ratings"))
+        .annotate(rating_count=Count("ratings")),
     )
     query = search_text.strip()
     if query:
@@ -207,9 +289,86 @@ def filtered_active_recipe_queryset(search_text: str, tag_slugs: list[str] | Non
         )
     for slug in tag_slugs or []:
         queryset = queryset.filter(tags__slug=slug)
-    if query or tag_slugs:
+    if made_by_user_id:
+        queryset = queryset.filter(made_records__user_id=made_by_user_id)
+    if query or tag_slugs or made_by_user_id:
         queryset = queryset.distinct()
     return queryset
+
+
+def makers_for_recipe_list_filter(
+    search_text: str,
+    tag_slugs: list[str],
+) -> list[RecipeListMakerFilter]:
+    """Family members who made at least one recipe matching the current text/tag filters."""
+    recipe_ids = filtered_active_recipe_queryset(search_text, tag_slugs).values("pk")
+    rows = list(
+        RecipeMade.objects.filter(recipe_id__in=recipe_ids)
+        .values("user_id")
+        .annotate(recipe_count=Count("recipe_id", distinct=True))
+        .order_by("-recipe_count", "user_id"),
+    )
+    if not rows:
+        return []
+    users_by_id = get_user_model().objects.in_bulk(row["user_id"] for row in rows)
+    makers: list[RecipeListMakerFilter] = []
+    for row in rows:
+        user = users_by_id.get(row["user_id"])
+        if user is None:
+            continue
+        makers.append(
+            RecipeListMakerFilter(
+                id=row["user_id"],
+                display_name=display_user_name(user),
+                recipe_count=row["recipe_count"],
+            ),
+        )
+    return makers
+
+
+def recently_made_recipes_for_user(
+    user,
+    *,
+    limit: int = RECENTLY_MADE_HOME_LIMIT,
+) -> list[RecentlyMadeItem]:
+    """Active recipes the user cooked recently, newest session first (one tile per recipe)."""
+    rows = list(
+        RecipeMade.objects.filter(user=user, recipe__deleted_at__isnull=True)
+        .values("recipe_id")
+        .annotate(last_made_at=Max("made_at"))
+        .order_by("-last_made_at", "-recipe_id")[:limit]
+    )
+    if not rows:
+        return []
+    made_at_by_id = {row["recipe_id"]: row["last_made_at"] for row in rows}
+    recipe_ids = [row["recipe_id"] for row in rows]
+    recipes_by_id = {
+        recipe.pk: recipe
+        for recipe in filtered_active_recipe_queryset("", []).filter(pk__in=recipe_ids)
+    }
+    ratings_by_id = dict(
+        Rating.objects.filter(user=user, recipe_id__in=recipe_ids).values_list("recipe_id", "value"),
+    )
+    items: list[RecentlyMadeItem] = []
+    for pk in recipe_ids:
+        recipe = recipes_by_id.get(pk)
+        if recipe is None:
+            continue
+        user_rating = ratings_by_id.get(pk)
+        rating_form = (
+            None
+            if user_rating is not None
+            else RatingForm(auto_id=f"recent-{pk}-%s")
+        )
+        items.append(
+            RecentlyMadeItem(
+                recipe=recipe,
+                made_at=made_at_by_id[pk],
+                user_rating=user_rating,
+                rating_form=rating_form,
+            ),
+        )
+    return items
 
 
 def filter_tags_for_recipe_list(search_text: str, tag_slugs: list[str]) -> list[Tag]:
@@ -285,6 +444,10 @@ def ordered_recipe_list_queryset(queryset, sort_key: str, sort_dir: str):
         if sort_dir == "asc":
             return qs.order_by("updated_at", *title_tiebreak)
         return qs.order_by("-updated_at", *title_tiebreak)
+    if sort_key == SORT_MADE:
+        if sort_dir == "asc":
+            return qs.order_by(F("last_made_at").asc(nulls_last=True), *title_tiebreak)
+        return qs.order_by(F("last_made_at").desc(nulls_last=True), *title_tiebreak)
     return qs.order_by(*title_tiebreak)
 
 
@@ -295,17 +458,24 @@ class RandomRecipeView(PrivateRecipeMixin, View):
         purge_expired_deleted_recipes()
         q = request.GET.get("q", "").strip()
         tag_slugs = normalized_recipe_list_tag_slugs(request)
-        recipe_qs = filtered_active_recipe_queryset(q, tag_slugs)
+        made_by_user_id = normalize_recipe_list_made_by(request)
+        recipe_qs = filtered_active_recipe_queryset(q, tag_slugs, made_by_user_id=made_by_user_id)
         pk_list = list(recipe_qs.values_list("pk", flat=True))
         if not pk_list:
-            if q or tag_slugs:
+            if q or tag_slugs or made_by_user_id:
                 messages.info(request, "No recipes match your current filters.")
             else:
                 messages.info(request, "There are no recipes to choose from yet.")
             list_url = reverse("recipes:list")
             sort = normalize_recipe_list_sort(request)
             sort_dir = normalize_recipe_list_sort_dir(request, sort)
-            pairs = build_recipe_list_query_pairs(q, tag_slugs, sort, sort_dir)
+            pairs = build_recipe_list_query_pairs(
+                q,
+                tag_slugs,
+                sort,
+                sort_dir,
+                made_by_user_id,
+            )
             query_string = urlencode(pairs)
             return redirect(f"{list_url}?{query_string}" if query_string else list_url)
         chosen_pk = random.choice(pk_list)
@@ -326,8 +496,13 @@ class RecipeListView(PrivateRecipeMixin, ListView):
         sort = normalize_recipe_list_sort(self.request)
         sort_dir = normalize_recipe_list_sort_dir(self.request, sort)
         tag_slugs = normalized_recipe_list_tag_slugs(self.request)
+        made_by_user_id = normalize_recipe_list_made_by(self.request)
         return ordered_recipe_list_queryset(
-            filtered_active_recipe_queryset(self.request.GET.get("q", ""), tag_slugs),
+            filtered_active_recipe_queryset(
+                self.request.GET.get("q", ""),
+                tag_slugs,
+                made_by_user_id=made_by_user_id,
+            ),
             sort,
             sort_dir,
         )
@@ -338,12 +513,14 @@ class RecipeListView(PrivateRecipeMixin, ListView):
         sort = normalize_recipe_list_sort(self.request)
         sort_dir = normalize_recipe_list_sort_dir(self.request, sort)
         tag_slugs = normalized_recipe_list_tag_slugs(self.request)
+        made_by_user_id = normalize_recipe_list_made_by(self.request)
         context["query"] = query
         context["sort"] = sort
         context["sort_dir"] = sort_dir
         context["list_tag_slugs"] = tag_slugs
+        context["list_made_by_user_id"] = made_by_user_id
         context["list_query_no_page"] = urlencode(
-            build_recipe_list_query_pairs(query, tag_slugs, sort, sort_dir),
+            build_recipe_list_query_pairs(query, tag_slugs, sort, sort_dir, made_by_user_id),
         )
         context["recipe_list_sort_options"] = RECIPE_LIST_SORT_OPTIONS
         context["sort_display_label"] = RECIPE_LIST_SORT_LABELS.get(
@@ -351,13 +528,24 @@ class RecipeListView(PrivateRecipeMixin, ListView):
             RECIPE_LIST_SORT_LABELS[SORT_TITLE],
         )
         context["filter_tags"] = filter_tags_for_recipe_list(query, tag_slugs)
-        deleted_recipes = (
+        filter_makers = makers_for_recipe_list_filter(query, tag_slugs)
+        context["filter_makers"] = filter_makers
+        list_made_by_display = None
+        if made_by_user_id:
+            for maker in filter_makers:
+                if maker.id == made_by_user_id:
+                    list_made_by_display = maker.display_name
+                    break
+        context["list_made_by_display"] = list_made_by_display
+        context["recently_made_items"] = recently_made_recipes_for_user(self.request.user)
+        attach_last_made_display(context["recipes"])
+        deleted_recipes = annotate_recipe_last_made(
             current_recipes()
             .filter(deleted_at__isnull=False)
             .select_related("owner")
             .prefetch_related("photos", "tags")
             .annotate(average_rating=Avg("ratings__value"))
-            .annotate(rating_count=Count("ratings"))
+            .annotate(rating_count=Count("ratings")),
         )
         if query:
             deleted_recipes = deleted_recipes.filter(
@@ -367,9 +555,13 @@ class RecipeListView(PrivateRecipeMixin, ListView):
             )
         for slug in tag_slugs:
             deleted_recipes = deleted_recipes.filter(tags__slug=slug)
-        if query or tag_slugs:
+        if made_by_user_id:
+            deleted_recipes = deleted_recipes.filter(made_records__user_id=made_by_user_id)
+        if query or tag_slugs or made_by_user_id:
             deleted_recipes = deleted_recipes.distinct()
-        context["deleted_recipes"] = deleted_recipes.order_by("-deleted_at", *_recipe_title_order())
+        deleted_list = list(deleted_recipes.order_by("-deleted_at", *_recipe_title_order()))
+        attach_last_made_display(deleted_list)
+        context["deleted_recipes"] = deleted_list
         return context
 
     def render_to_response(self, context, **response_kwargs):
@@ -781,7 +973,22 @@ class AddCommentView(View):
 @require_POST
 def rate_recipe(request, slug):
     recipe = get_object_or_404(current_recipes(), slug=slug)
-    form = RatingForm(request.POST)
+    if request.POST.get("clear") == "1":
+        deleted, _ = Rating.objects.filter(recipe=recipe, user=request.user).delete()
+        message = "Rating removed." if deleted else "No rating to remove."
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "message": message,
+                    "rating": None,
+                    "cleared": True,
+                    **rating_payload(recipe, request.user),
+                }
+            )
+        messages.success(request, message)
+        return redirect(f"{recipe.get_absolute_url()}#discussion")
+    form = RatingForm(rating_form_post_data(request.POST))
     if form.is_valid():
         rating, _ = Rating.objects.update_or_create(
             recipe=recipe,
