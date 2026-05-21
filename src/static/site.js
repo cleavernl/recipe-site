@@ -30,6 +30,26 @@ document.addEventListener("DOMContentLoaded", () => {
     setTheme(themeToggle.checked ? "dark" : "light");
   });
 
+  document.querySelectorAll("[data-site-nav-menu]").forEach((menu) => {
+    if (!(menu instanceof HTMLDetailsElement)) {
+      return;
+    }
+    const panel = menu.querySelector(".site-nav-menu-panel");
+    if (!(panel instanceof HTMLElement)) {
+      return;
+    }
+    panel.querySelectorAll("a[href]").forEach((link) => {
+      link.addEventListener("click", () => {
+        menu.open = false;
+      });
+    });
+    panel.querySelectorAll("button[type='submit']").forEach((button) => {
+      button.addEventListener("click", () => {
+        menu.open = false;
+      });
+    });
+  });
+
   const dismissToast = (toast) => {
     const timeoutId = Number.parseInt(toast.dataset.timeoutId || "", 10);
     if (timeoutId) {
@@ -648,8 +668,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       swipeHint.textContent =
         activeIndex === 0
-          ? "Swipe left for instructions. Your place in the list is saved when you switch."
-          : "Swipe right for ingredients. Your place in the list is saved when you switch.";
+          ? "Swipe left for instructions."
+          : "Swipe right for ingredients.";
     };
 
     const updateUi = ({ duringDrag = false, restoreScroll = false } = {}) => {
@@ -704,6 +724,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (item instanceof HTMLButtonElement) {
         const isDone = item.classList.toggle("is-done");
         item.setAttribute("aria-pressed", isDone ? "true" : "false");
+        item.blur();
         afterLayout(() => syncZoneHeight());
         return;
       }
@@ -848,6 +869,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let pointerX = 0;
     let axis = null;
     let dragging = false;
+    let swipeTouchActive = false;
 
     const setDragOffset = (dx) => {
       const width = zone.getBoundingClientRect().width;
@@ -870,10 +892,28 @@ document.addEventListener("DOMContentLoaded", () => {
       updateUi({ duringDrag: false });
     };
 
+    const swipeTouchAllowed = (event) => {
+      if (!mobileQuery.matches || exitDialogOpen || event.touches.length !== 1) {
+        return false;
+      }
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        exitOverlay instanceof HTMLElement &&
+        !exitOverlay.hidden &&
+        target.closest("[data-make-exit-overlay]")
+      ) {
+        return false;
+      }
+      return true;
+    };
+
     const onTouchStart = (event) => {
-      if (!mobileQuery.matches || event.touches.length !== 1) {
+      swipeTouchActive = false;
+      if (!swipeTouchAllowed(event)) {
         return;
       }
+      swipeTouchActive = true;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       pointerX = startX;
@@ -882,7 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const onTouchMove = (event) => {
-      if (!mobileQuery.matches || event.touches.length !== 1) {
+      if (!swipeTouchActive || !mobileQuery.matches || event.touches.length !== 1) {
         return;
       }
       const x = event.touches[0].clientX;
@@ -919,6 +959,10 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const onTouchEnd = () => {
+      if (!swipeTouchActive) {
+        return;
+      }
+      swipeTouchActive = false;
       if (!mobileQuery.matches || axis !== "x" || !dragging) {
         axis = null;
         dragging = false;
@@ -929,10 +973,10 @@ document.addEventListener("DOMContentLoaded", () => {
       dragging = false;
     };
 
-    zone.addEventListener("touchstart", onTouchStart, { passive: true });
-    zone.addEventListener("touchmove", onTouchMove, { passive: false });
-    zone.addEventListener("touchend", onTouchEnd);
-    zone.addEventListener("touchcancel", onTouchEnd);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchEnd);
   })();
 
   document.querySelectorAll(".recipe-quick-tag").forEach((details) => {
@@ -1586,11 +1630,64 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const easeTooltip = (liveSearchForm.getAttribute("data-recipe-ease-tooltip") || "").trim();
 
+    const syncEaseHintCopy = () => {
+      if (!easeTooltip) {
+        return;
+      }
+      liveSearchForm.querySelectorAll("[data-recipe-ease-help-hint], [data-recipe-ease-summary]").forEach((el) => {
+        if (el instanceof HTMLElement) {
+          el.textContent = easeTooltip;
+        }
+      });
+    };
+
+    const closeEaseHelpHints = () => {
+      if (!(sortListbox instanceof HTMLElement)) {
+        return;
+      }
+      sortListbox.querySelectorAll("[data-recipe-ease-help-hint]").forEach((hint) => {
+        if (hint instanceof HTMLElement) {
+          hint.hidden = true;
+        }
+      });
+      sortListbox.querySelectorAll("[data-recipe-ease-help]").forEach((btn) => {
+        if (btn instanceof HTMLButtonElement) {
+          btn.setAttribute("aria-expanded", "false");
+        }
+      });
+    };
+
+    const toggleEaseHelpHint = (btn) => {
+      const option = btn.closest("[data-value]");
+      const hint = option?.querySelector("[data-recipe-ease-help-hint]");
+      if (!(hint instanceof HTMLElement)) {
+        return;
+      }
+      const willOpen = hint.hidden;
+      closeEaseHelpHints();
+      if (willOpen) {
+        hint.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+      }
+    };
+
     const syncEaseTriggerTitle = () => {
       if (!(sortTrigger instanceof HTMLButtonElement)) {
         return;
       }
       sortTrigger.title = getSortValue() === "ease" && easeTooltip ? easeTooltip : "";
+    };
+
+    const syncEaseSummary = () => {
+      const summary = liveSearchForm.querySelector("[data-recipe-ease-summary]");
+      if (!(summary instanceof HTMLElement)) {
+        return;
+      }
+      const show = getSortValue() === "ease" && easeTooltip;
+      summary.hidden = !show;
+      if (show && !summary.textContent.trim()) {
+        summary.textContent = easeTooltip;
+      }
     };
 
     const getSortOptions = () =>
@@ -1616,6 +1713,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!(sortListbox instanceof HTMLElement)) {
         return;
       }
+      closeEaseHelpHints();
       sortListbox.hidden = true;
       sortCombobox?.classList.remove("is-open");
       sortTrigger?.setAttribute("aria-expanded", "false");
@@ -2175,14 +2273,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         syncSortDirToggle(nextDefault);
         syncEaseTriggerTitle();
+        syncEaseSummary();
         void runLiveSearch();
         sortTrigger?.focus();
       };
 
+      syncEaseHintCopy();
       syncSortDirToggle(getSortDirValue());
       syncTriggerLabel();
       syncListboxAriaSelected();
       syncEaseTriggerTitle();
+      syncEaseSummary();
       syncMadeByTriggerLabel();
       syncMadeByListboxAriaSelected();
 
@@ -2293,7 +2394,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
         sortListbox.addEventListener("click", (event) => {
           const target = event.target;
-          const option = target instanceof Element ? target.closest("[data-value]") : null;
+          if (!(target instanceof Element)) {
+            return;
+          }
+          const helpBtn = target.closest("[data-recipe-ease-help]");
+          if (helpBtn instanceof HTMLButtonElement) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleEaseHelpHint(helpBtn);
+            return;
+          }
+          if (target.closest("[data-recipe-ease-help-hint]")) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          const option = target.closest("[data-value]");
           if (!(option instanceof HTMLElement)) {
             return;
           }

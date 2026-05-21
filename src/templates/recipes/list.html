@@ -85,7 +85,14 @@
                     <span class="search-sort-option-row">
                       <span class="search-sort-option-label">{{ label }}</span>
                       {% if value == "ease" %}
-                        <span class="search-sort-option-help" title="Ingredients + steps (fewer is easier).">
+                        <button
+                          type="button"
+                          class="search-sort-ease-help-btn"
+                          data-recipe-ease-help
+                          aria-label="What does Ease mean?"
+                          aria-expanded="false"
+                          aria-controls="recipe-sort-ease-hint"
+                        >
                           <svg class="search-sort-help-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75"></circle>
                             <path
@@ -96,9 +103,12 @@
                             ></path>
                             <circle cx="12" cy="17.35" r="1.05" fill="currentColor" stroke="none"></circle>
                           </svg>
-                        </span>
+                        </button>
                       {% endif %}
                     </span>
+                    {% if value == "ease" %}
+                      <p id="recipe-sort-ease-hint" class="search-sort-ease-hint" data-recipe-ease-help-hint hidden role="note"></p>
+                    {% endif %}
                   </li>
                 {% endfor %}
               </ul>
@@ -125,6 +135,11 @@
               </span>
                 </button>
               </div>
+              <p
+                class="search-sort-ease-summary"
+                data-recipe-ease-summary
+                {% if sort != "ease" %}hidden{% endif %}
+              ></p>
             </div>
           </div>
         </div>

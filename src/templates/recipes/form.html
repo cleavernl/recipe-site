@@ -156,23 +156,25 @@
             {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
             <div class="form-row-grid ingredient-row-grid">
               {{ form.non_field_errors }}
-              <div>
-                <label class="sr-only" for="{{ form.name.id_for_label }}">Ingredient</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ form.name.id_for_label }}">Ingredient</label>
                 {{ form.name }}
                 {{ form.name.errors }}
               </div>
-              <div>
-                <label class="sr-only" for="{{ form.quantity.id_for_label }}">Quantity</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ form.quantity.id_for_label }}">Quantity</label>
                 {{ form.quantity }}
                 {{ form.quantity.errors }}
               </div>
-              <div>
-                <label class="sr-only" for="{{ form.notes.id_for_label }}">Notes</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ form.notes.id_for_label }}">Notes</label>
                 {{ form.notes }}
                 {{ form.notes.errors }}
               </div>
-              <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+              <div class="form-row-actions">
+                <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
+                <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+              </div>
             </div>
           </div>
           {% endfor %}
@@ -183,20 +185,22 @@
             {{ ingredient_formset.empty_form.order.as_hidden }}
             {% if ingredient_formset.empty_form.DELETE %}{{ ingredient_formset.empty_form.DELETE.as_hidden }}{% endif %}
             <div class="form-row-grid ingredient-row-grid">
-              <div>
-                <label class="sr-only" for="{{ ingredient_formset.empty_form.name.id_for_label }}">Ingredient</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ ingredient_formset.empty_form.name.id_for_label }}">Ingredient</label>
                 {{ ingredient_formset.empty_form.name }}
               </div>
-              <div>
-                <label class="sr-only" for="{{ ingredient_formset.empty_form.quantity.id_for_label }}">Quantity</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ ingredient_formset.empty_form.quantity.id_for_label }}">Quantity</label>
                 {{ ingredient_formset.empty_form.quantity }}
               </div>
-              <div>
-                <label class="sr-only" for="{{ ingredient_formset.empty_form.notes.id_for_label }}">Notes</label>
+              <div class="ingredient-field">
+                <label class="form-field-label" for="{{ ingredient_formset.empty_form.notes.id_for_label }}">Notes</label>
                 {{ ingredient_formset.empty_form.notes }}
               </div>
-              <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+              <div class="form-row-actions">
+                <button class="drag-handle" type="button" draggable="true" data-drag-handle aria-label="Drag to reorder ingredient">⋮</button>
+                <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove ingredient">×</button>
+              </div>
             </div>
           </div>
         </template>
@@ -220,12 +224,14 @@
             {% if form.DELETE %}{{ form.DELETE.as_hidden }}{% endif %}
             <div class="form-row-grid step-row-grid">
               {{ form.non_field_errors }}
-              <div>
-                <label class="sr-only" for="{{ form.text.id_for_label }}">Step details</label>
+              <div class="step-field">
+                <label class="form-field-label" for="{{ form.text.id_for_label }}">Step details</label>
                 {{ form.text }}
                 {{ form.text.errors }}
               </div>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+              <div class="form-row-actions">
+                <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+              </div>
             </div>
           </div>
           {% endfor %}
@@ -236,11 +242,13 @@
             {{ step_formset.empty_form.order.as_hidden }}
             {% if step_formset.empty_form.DELETE %}{{ step_formset.empty_form.DELETE.as_hidden }}{% endif %}
             <div class="form-row-grid step-row-grid">
-              <div>
-                <label class="sr-only" for="{{ step_formset.empty_form.text.id_for_label }}">Step details</label>
+              <div class="step-field">
+                <label class="form-field-label" for="{{ step_formset.empty_form.text.id_for_label }}">Step details</label>
                 {{ step_formset.empty_form.text }}
               </div>
-              <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+              <div class="form-row-actions">
+                <button class="icon-button remove-row-button" type="button" data-remove-row aria-label="Remove instruction">×</button>
+              </div>
             </div>
           </div>
         </template>

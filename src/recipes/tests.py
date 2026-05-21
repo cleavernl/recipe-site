@@ -399,6 +399,17 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, 'data-value="made"')
         self.assertContains(response, "Last made")
 
+    def test_recipe_list_ease_sort_has_tappable_help(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, 'data-value="ease"')
+        self.assertContains(response, "data-recipe-ease-help")
+        self.assertContains(response, "data-recipe-ease-help-hint")
+        self.assertContains(response, "data-recipe-ease-summary")
+        self.assertContains(response, "data-recipe-ease-tooltip")
+
     def test_recipe_list_sorts_by_last_made_newest_first(self):
         self.client.force_login(self.other_user)
         base = timezone.now()
@@ -785,6 +796,8 @@ class RecipeWorkflowTests(TestCase):
         self.assertNotContains(response, 'type="checkbox" name="tags-0-DELETE"')
         self.assertNotContains(response, 'data-form-row draggable="true"')
         self.assertContains(response, 'data-drag-handle aria-label="Drag to reorder ingredient"')
+        self.assertContains(response, 'class="form-field-label"')
+        self.assertContains(response, "form-row-actions")
         self.assertLess(content.index("<h2>Photos</h2>"), content.index("<h2>Ingredients</h2>"))
 
     def test_recipe_edit_tag_suggestions_exclude_orphan_tags(self):
