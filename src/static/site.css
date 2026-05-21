@@ -75,7 +75,7 @@ button,
     transform 160ms ease;
 }
 
-button:hover,
+button:hover:not(.make-check-item),
 .button:hover {
   background: var(--accent-dark);
   color: #fff;
@@ -1288,10 +1288,13 @@ select:focus-visible {
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
+  box-sizing: border-box;
   color: var(--ink);
   left: 0;
   margin: 0;
   max-height: min(14rem, 42vh);
+  max-width: calc(100vw - 1rem);
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0.25rem 0;
   position: fixed;
@@ -1880,6 +1883,7 @@ form p {
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow-soft);
+  box-sizing: border-box;
   margin-top: 0.4rem;
   min-width: 17rem;
   padding: 0.85rem;
@@ -1887,6 +1891,11 @@ form p {
   right: 0;
   top: 100%;
   z-index: 20;
+}
+
+.recipe-quick-tag-panel.is-positioned {
+  margin-top: 0;
+  min-width: 0;
 }
 
 .recipe-quick-tag-fields {
@@ -2210,6 +2219,8 @@ form p {
   font-size: 1.2rem;
   line-height: 1;
   padding: 0;
+  touch-action: none;
+  user-select: none;
   width: 2rem;
 }
 
@@ -2219,8 +2230,13 @@ form p {
   transform: none;
 }
 
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .ingredient-row.dragging {
-  opacity: 0.5;
+  opacity: 0.65;
+  touch-action: none;
 }
 
 .formset-add-row {
@@ -3693,28 +3709,79 @@ body:has([data-make-mode]) main.container {
   padding: clamp(1rem, 3vw, 1.35rem);
   text-align: left;
   transition:
-    border-color 0.55s ease,
-    opacity 0.55s ease 0.08s,
-    transform 120ms ease;
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease,
+    opacity 0.12s ease,
+    transform 0.08s ease;
   width: 100%;
 }
 
+button.make-check-item:hover,
+button.make-check-item:focus-visible,
+button.make-check-item.is-touch-pressed {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
+  transform: none;
+}
+
+button.make-check-item:hover .make-check-primary,
+button.make-check-item:hover .make-check-step-text,
+button.make-check-item:focus-visible .make-check-primary,
+button.make-check-item:focus-visible .make-check-step-text,
+button.make-check-item.is-touch-pressed .make-check-primary,
+button.make-check-item.is-touch-pressed .make-check-step-text {
+  color: var(--ink);
+}
+
+button.make-check-item:hover .make-check-quantity,
+button.make-check-item:focus-visible .make-check-quantity,
+button.make-check-item.is-touch-pressed .make-check-quantity {
+  color: var(--accent-dark);
+}
+
+button.make-check-item:hover .make-check-note,
+button.make-check-item:focus-visible .make-check-note,
+button.make-check-item.is-touch-pressed .make-check-note {
+  color: var(--muted);
+}
+
+button.make-check-item:hover .make-check-step-text a,
+button.make-check-item:focus-visible .make-check-step-text a,
+button.make-check-item.is-touch-pressed .make-check-step-text a {
+  color: var(--accent);
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .make-check-item:hover {
+  .make-check-item {
+    transition:
+      background 0.16s ease,
+      border-color 0.16s ease,
+      box-shadow 0.16s ease,
+      color 0.16s ease,
+      opacity 0.55s ease 0.08s,
+      transform 120ms ease;
+  }
+
+  button.make-check-item:hover {
     border-color: var(--accent);
     transform: translateY(-1px);
   }
 }
 
-@media (hover: none) {
-  .make-check-item {
-    transition:
-      border-color 0.12s ease,
-      opacity 0.12s ease,
-      transform 0.08s ease;
+@media (hover: none), (pointer: coarse) {
+  button.make-check-item:hover {
+    background: var(--card);
+    border-color: var(--border);
+    box-shadow: var(--shadow-soft);
+    color: var(--ink);
+    transform: none;
   }
 
-  .make-check-item:active {
+  button.make-check-item.is-touch-pressed {
     border-color: var(--accent);
     transform: scale(0.995);
   }

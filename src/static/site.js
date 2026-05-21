@@ -281,10 +281,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const positionPanel = (input) => {
       const r = input.getBoundingClientRect();
       const gap = 4;
+      const margin = 8;
+      const minWidth = 160;
+      const maxWidth = Math.min(320, window.innerWidth - margin * 2);
+      const width = Math.min(Math.max(r.width, minWidth), maxWidth);
+      let left = r.left;
+      if (left + width > window.innerWidth - margin) {
+        left = window.innerWidth - margin - width;
+      }
+      if (left < margin) {
+        left = margin;
+      }
+      let top = r.bottom + gap;
+      const panelHeight = panel.offsetHeight || 0;
+      const maxTop = window.innerHeight - margin - panelHeight;
+      if (panelHeight > 0 && top > maxTop) {
+        top = Math.max(margin, r.top - gap - panelHeight);
+      }
       panel.style.position = "fixed";
-      panel.style.left = `${r.left}px`;
-      panel.style.top = `${r.bottom + gap}px`;
-      panel.style.width = `${Math.max(r.width, 160)}px`;
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.top = `${Math.round(top)}px`;
+      panel.style.width = `${Math.round(width)}px`;
+      panel.style.maxWidth = `${Math.round(maxWidth)}px`;
     };
 
     const updateHighlightClasses = () => {
@@ -333,7 +351,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       items = filterSuggestions(activeInput.value);
-      positionPanel(activeInput);
       panel.innerHTML = "";
       highlightIndex = items.length > 0 ? 0 : -1;
       items.forEach((name, index) => {
@@ -357,6 +374,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         panel.hidden = false;
         updateHighlightClasses();
+        positionPanel(activeInput);
+        window.requestAnimationFrame(() => {
+          if (activeInput && !panel.hidden) {
+            positionPanel(activeInput);
+          }
+        });
       }
     };
 
@@ -465,6 +488,60 @@ document.addEventListener("DOMContentLoaded", () => {
     const prevBtn = root.querySelector("[data-make-nav='prev']");
     const nextBtn = root.querySelector("[data-make-nav='next']");
     const mobileQuery = window.matchMedia("(max-width: 48rem)");
+    const touchLikeQuery = window.matchMedia("(hover: none), (pointer: coarse)");
+    const MAKE_CHECK_PRESS_CLEAR_MS = 220;
+    let makeCheckPressClearId = 0;
+
+    const clearMakeCheckTouchPress = () => {
+      root.querySelectorAll(".make-check-item.is-touch-pressed").forEach((item) => {
+        item.classList.remove("is-touch-pressed");
+      });
+    };
+
+    const scheduleMakeCheckTouchPressClear = () => {
+      window.clearTimeout(makeCheckPressClearId);
+      makeCheckPressClearId = window.setTimeout(clearMakeCheckTouchPress, MAKE_CHECK_PRESS_CLEAR_MS);
+    };
+
+    if (touchLikeQuery.matches) {
+      root.addEventListener(
+        "pointerdown",
+        (event) => {
+          const item = event.target.closest("[data-make-item]");
+          if (!(item instanceof HTMLButtonElement)) {
+            return;
+          }
+          window.clearTimeout(makeCheckPressClearId);
+          clearMakeCheckTouchPress();
+          item.classList.add("is-touch-pressed");
+        },
+        { passive: true },
+      );
+
+      root.addEventListener(
+        "pointerup",
+        (event) => {
+          if (event.target.closest("[data-make-item]")) {
+            scheduleMakeCheckTouchPressClear();
+          }
+        },
+        { passive: true },
+      );
+
+      root.addEventListener("pointercancel", scheduleMakeCheckTouchPressClear, { passive: true });
+
+      document.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (event.target.closest("[data-make-item]")) {
+            return;
+          }
+          window.clearTimeout(makeCheckPressClearId);
+          clearMakeCheckTouchPress();
+        },
+        { passive: true },
+      );
+    }
 
     const panelKeys = ["ingredients", "steps"];
     const phaseLabels = ["Ingredients", "Instructions"];
@@ -725,6 +802,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const isDone = item.classList.toggle("is-done");
         item.setAttribute("aria-pressed", isDone ? "true" : "false");
         item.blur();
+        if (touchLikeQuery.matches) {
+          scheduleMakeCheckTouchPressClear();
+        }
         afterLayout(() => syncZoneHeight());
         return;
       }
@@ -983,17 +1063,81 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!(details instanceof HTMLDetailsElement)) {
       return;
     }
+    const panel = details.querySelector(".recipe-quick-tag-panel");
+    const anchor = details.querySelector(".recipe-quick-tag-summary");
     let onDocClick = null;
+    let onReposition = null;
+
+    const clearQuickTagPanelPosition = () => {
+      if (!(panel instanceof HTMLElement)) {
+        return;
+      }
+      panel.classList.remove("is-positioned");
+      panel.style.position = "";
+      panel.style.left = "";
+      panel.style.top = "";
+      panel.style.width = "";
+      panel.style.maxWidth = "";
+      panel.style.right = "";
+    };
+
+    const positionQuickTagPanel = () => {
+      if (!(panel instanceof HTMLElement) || !(anchor instanceof HTMLElement) || !details.open) {
+        return;
+      }
+      const margin = 8;
+      const gap = 4;
+      const minWidth = 272;
+      const maxWidth = Math.min(minWidth, window.innerWidth - margin * 2);
+      const width = maxWidth;
+      const anchorRect = anchor.getBoundingClientRect();
+      let left = anchorRect.right - width;
+      if (left < margin) {
+        left = margin;
+      }
+      if (left + width > window.innerWidth - margin) {
+        left = window.innerWidth - margin - width;
+      }
+      panel.classList.add("is-positioned");
+      panel.style.position = "fixed";
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.top = `${Math.round(anchorRect.bottom + gap)}px`;
+      panel.style.width = `${Math.round(width)}px`;
+      panel.style.maxWidth = `${Math.round(maxWidth)}px`;
+      panel.style.right = "auto";
+    };
+
+    const stopRepositionListeners = () => {
+      if (onReposition) {
+        window.removeEventListener("resize", onReposition);
+        window.removeEventListener("scroll", onReposition, true);
+        onReposition = null;
+      }
+    };
+
     details.addEventListener("toggle", () => {
       if (onDocClick) {
         document.removeEventListener("click", onDocClick);
         onDocClick = null;
       }
+      stopRepositionListeners();
       if (!details.open) {
+        clearQuickTagPanelPosition();
         return;
       }
+      positionQuickTagPanel();
+      onReposition = () => {
+        positionQuickTagPanel();
+      };
+      window.addEventListener("resize", onReposition);
+      window.addEventListener("scroll", onReposition, true);
+      window.requestAnimationFrame(positionQuickTagPanel);
       onDocClick = (event) => {
         if (!(event.target instanceof Node) || !details.contains(event.target)) {
+          const suggestPanel = document.getElementById("recipe-tag-suggest-panel");
+          if (suggestPanel instanceof HTMLElement && suggestPanel.contains(event.target)) {
+            return;
+          }
           details.open = false;
         }
       };
@@ -1328,50 +1472,85 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (isIngredientSortable) {
-      rows.addEventListener("dragstart", (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const handle = target.closest("[data-drag-handle]");
-        if (!handle) {
-          event.preventDefault();
-          return;
-        }
-        const row = handle.closest("[data-form-row]");
-        if (!row || row.classList.contains("is-removed")) {
-          event.preventDefault();
-          return;
-        }
-        if (event.dataTransfer) {
-          event.dataTransfer.effectAllowed = "move";
-        }
-        draggingRow = row;
-        row.classList.add("dragging");
-      });
+      let dragPointerId = null;
+      let dragHandle = null;
 
-      rows.addEventListener("dragend", () => {
+      const finishIngredientDrag = () => {
         draggingRow?.classList.remove("dragging");
         draggingRow = null;
+        dragPointerId = null;
+        dragHandle = null;
         syncOrder();
-      });
+      };
 
-      rows.addEventListener("dragover", (event) => {
+      const moveIngredientDrag = (event) => {
         if (!draggingRow) {
           return;
         }
-        event.preventDefault();
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const overRow = target.closest("[data-form-row]");
-        if (!overRow || overRow === draggingRow || overRow.classList.contains("is-removed")) {
+        const hit =
+          document.elementFromPoint(event.clientX, event.clientY) ??
+          (event.target instanceof Element ? event.target : null);
+        const overRow = hit instanceof Element ? hit.closest("[data-form-row]") : null;
+        if (
+          !overRow ||
+          overRow === draggingRow ||
+          overRow.classList.contains("is-removed") ||
+          !rows.contains(overRow)
+        ) {
           return;
         }
         const rect = overRow.getBoundingClientRect();
         const before = event.clientY < rect.top + rect.height / 2;
         rows.insertBefore(draggingRow, before ? overRow : overRow.nextSibling);
+      };
+
+      rows.addEventListener("pointerdown", (event) => {
+        if (!(event.target instanceof HTMLElement)) {
+          return;
+        }
+        const handle = event.target.closest("[data-drag-handle]");
+        if (!handle) {
+          return;
+        }
+        const row = handle.closest("[data-form-row]");
+        if (!row || row.classList.contains("is-removed")) {
+          return;
+        }
+        event.preventDefault();
+        draggingRow = row;
+        dragHandle = handle;
+        dragPointerId = event.pointerId;
+        row.classList.add("dragging");
+        handle.setPointerCapture(event.pointerId);
+      });
+
+      rows.addEventListener("pointermove", (event) => {
+        if (dragPointerId === null || event.pointerId !== dragPointerId) {
+          return;
+        }
+        event.preventDefault();
+        moveIngredientDrag(event);
+      });
+
+      rows.addEventListener("pointerup", (event) => {
+        if (dragPointerId === null || event.pointerId !== dragPointerId) {
+          return;
+        }
+        if (dragHandle instanceof HTMLElement) {
+          try {
+            dragHandle.releasePointerCapture(event.pointerId);
+          } catch {
+            /* pointer already released */
+          }
+        }
+        finishIngredientDrag();
+      });
+
+      rows.addEventListener("pointercancel", (event) => {
+        if (dragPointerId === null || event.pointerId !== dragPointerId) {
+          return;
+        }
+        finishIngredientDrag();
       });
     }
   });
