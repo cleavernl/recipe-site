@@ -75,7 +75,7 @@ button,
     transform 160ms ease;
 }
 
-button:hover:not(.make-check-item),
+button:hover:not(.make-check-item):not(.search-tag-chip),
 .button:hover {
   background: var(--accent-dark);
   color: #fff;
@@ -1035,11 +1035,33 @@ select:focus-visible {
     color 140ms ease;
 }
 
-.search-tag-chip:hover {
-  background: var(--accent-soft);
-  border-color: rgba(109, 78, 201, 0.28);
-  color: var(--accent-dark);
-  transform: none;
+@media (hover: hover) and (pointer: fine) {
+  .search-tag-chip:hover {
+    background: var(--accent-soft);
+    border-color: rgba(109, 78, 201, 0.28);
+    color: var(--accent-dark);
+    transform: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .search-tag-chip:hover {
+    background: var(--card-muted);
+    border-color: var(--border);
+    color: var(--ink);
+  }
+
+  .search-tag-chip.is-selected:hover {
+    background: var(--accent-soft);
+    border-color: rgba(109, 78, 201, 0.45);
+    color: var(--accent-dark);
+  }
+
+  .search-tag-chip.is-touch-pressed {
+    background: var(--accent-soft);
+    border-color: rgba(109, 78, 201, 0.45);
+    color: var(--accent-dark);
+  }
 }
 
 .search-tag-chip.is-selected {
@@ -1116,7 +1138,10 @@ select:focus-visible {
 }
 
 .tag-overflow.tag-overflow--search .tag-overflow-details {
+  flex-shrink: 0;
   margin-left: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .tag-overflow-summary {
@@ -2563,6 +2588,7 @@ form p {
 }
 
 .recently-made-card-media-wrap {
+  container-type: inline-size;
   position: relative;
 }
 
@@ -2731,6 +2757,35 @@ form p {
 
   .recently-made-card-date {
     font-size: 0.72rem;
+  }
+}
+
+@container (max-width: 11.5rem) {
+  .recently-made-review-overlay {
+    padding: 0.2rem 0.12rem;
+  }
+
+  .recently-made-review-prompt {
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.12rem;
+  }
+
+  .recently-made-star-rating {
+    gap: 0.08rem;
+  }
+
+  .recently-made-star-rating .star-choice label {
+    padding: 0.04rem;
+  }
+
+  .recently-made-star-rating .star-choice label span[aria-hidden="true"] {
+    font-size: 1.1rem;
+  }
+
+  .recently-made-review-thanks {
+    font-size: 0.82rem;
+    padding: 0 0.25rem;
   }
 }
 
@@ -3058,7 +3113,7 @@ form p {
 
   .tag-overflow.tag-overflow--search .tag-overflow-main {
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .search-tag-chips.tag-overflow-row {

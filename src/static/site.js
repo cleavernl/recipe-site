@@ -1682,6 +1682,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       };
 
+      const rowFitsWithOverflowControl = () => {
+        if (details.hidden) {
+          return row.scrollWidth <= row.clientWidth + 1;
+        }
+        const gap = Number.parseFloat(window.getComputedStyle(main).columnGap || "") || 0;
+        const reserved = details.offsetWidth + gap;
+        const maxRowWidth = Math.max(0, main.clientWidth - reserved);
+        return row.scrollWidth <= maxRowWidth + 1;
+      };
+
       const layout = () => {
         ensureOrder();
         consolidateToRow();
@@ -1693,21 +1703,16 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        if (row.scrollWidth <= row.clientWidth + 1) {
+        details.hidden = false;
+
+        if (rowFitsWithOverflowControl()) {
           details.hidden = true;
           syncCountAndLabel(0);
           return;
         }
 
-        details.hidden = false;
-
-        if (row.scrollWidth <= row.clientWidth + 1) {
-          syncCountAndLabel(0);
-          return;
-        }
-
         let guard = 0;
-        while (row.scrollWidth > row.clientWidth + 1 && row.children.length > 0 && guard < 240) {
+        while (!rowFitsWithOverflowControl() && row.children.length > 0 && guard < 240) {
           const widthBefore = row.scrollWidth;
           const last = row.lastElementChild;
           if (!last) {
@@ -1727,6 +1732,9 @@ document.addEventListener("DOMContentLoaded", () => {
           details.hidden = true;
           details.open = false;
           syncCountAndLabel(0);
+        } else {
+          details.hidden = false;
+          syncCountAndLabel(panel.childElementCount);
         }
       };
 
@@ -1736,6 +1744,13 @@ document.addEventListener("DOMContentLoaded", () => {
       overflowRoot[tagOverflowResizeObserver] = ro;
       ro.observe(main);
       window.requestAnimationFrame(layout);
+
+      const summary = details.querySelector("summary");
+      if (summary instanceof HTMLElement) {
+        summary.addEventListener("click", (event) => {
+          event.stopPropagation();
+        });
+      }
 
       if (
         overflowRoot.hasAttribute("data-tag-overflow-close-on-pick") &&
@@ -1760,6 +1775,50 @@ document.addEventListener("DOMContentLoaded", () => {
   const liveSearchForm = document.querySelector("[data-recipe-list-search]");
   const liveSearchDynamic = document.querySelector("[data-recipe-list-dynamic]");
   if (liveSearchForm instanceof HTMLFormElement && liveSearchDynamic) {
+    const touchLikeQuery = window.matchMedia("(hover: none), (pointer: coarse)");
+    const TAG_CHIP_PRESS_CLEAR_MS = 220;
+    let tagChipPressClearId = 0;
+
+    const clearTagChipTouchPress = () => {
+      liveSearchForm.querySelectorAll(".search-tag-chip.is-touch-pressed").forEach((chip) => {
+        chip.classList.remove("is-touch-pressed");
+      });
+    };
+
+    const scheduleTagChipTouchPressClear = () => {
+      window.clearTimeout(tagChipPressClearId);
+      tagChipPressClearId = window.setTimeout(clearTagChipTouchPress, TAG_CHIP_PRESS_CLEAR_MS);
+    };
+
+    if (touchLikeQuery.matches) {
+      liveSearchForm.addEventListener(
+        "pointerdown",
+        (event) => {
+          const chip =
+            event.target instanceof Element ? event.target.closest(".search-tag-chip") : null;
+          if (!(chip instanceof HTMLButtonElement)) {
+            return;
+          }
+          window.clearTimeout(tagChipPressClearId);
+          clearTagChipTouchPress();
+          chip.classList.add("is-touch-pressed");
+        },
+        { passive: true },
+      );
+      liveSearchForm.addEventListener(
+        "pointerup",
+        (event) => {
+          if (event.target instanceof Element && event.target.closest(".search-tag-chip")) {
+            scheduleTagChipTouchPressClear();
+          }
+        },
+        { passive: true },
+      );
+      liveSearchForm.addEventListener("pointercancel", scheduleTagChipTouchPressClear, {
+        passive: true,
+      });
+    }
+
     const input = liveSearchForm.querySelector("input[name='q']");
     const sortInput = liveSearchForm.querySelector("[data-recipe-sort-input]");
     const sortCombobox = liveSearchForm.querySelector("[data-recipe-sort-combobox]");
@@ -2534,6 +2593,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!inFilters) {
           return;
         }
+        if (
+          event.target instanceof Element &&
+          event.target.closest(".tag-overflow-summary, [data-tag-overflow-details]")
+        ) {
+          return;
+        }
         const btn = event.target.closest(".search-tag-chip");
         const tagHiddenRoot = getTagHiddenRoot();
         if (!(btn instanceof HTMLButtonElement) || !tagHiddenRoot) {
@@ -2547,6 +2612,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const nextSelected = !btn.classList.contains("is-selected");
         btn.classList.toggle("is-selected", nextSelected);
         btn.setAttribute("aria-pressed", nextSelected ? "true" : "false");
+        if (touchLikeQuery.matches) {
+          scheduleTagChipTouchPressClear();
+        }
         tagHiddenRoot.querySelectorAll("input[name='tag']").forEach((inp) => {
           if (inp instanceof HTMLInputElement && inp.value === slug) {
             inp.remove();
