@@ -141,7 +141,32 @@ document.addEventListener("DOMContentLoaded", () => {
     form.querySelectorAll(".star-choice").forEach((choice) => {
       const input = choice.querySelector("input[type='radio']");
       const value = input ? Number.parseInt(input.value, 10) : 0;
-      choice.classList.toggle("is-filled", value <= checkedValue);
+      choice.classList.toggle("is-filled", value > 0 && value <= checkedValue);
+    });
+  };
+
+  const clearStarFormUI = (form) => {
+    form.querySelectorAll("input[type='radio']").forEach((radio) => {
+      radio.checked = false;
+    });
+    updateStars(form);
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && form.contains(active)) {
+      active.blur();
+    }
+  };
+
+  const syncStarFormsFromPayload = (payload) => {
+    if (!payload?.ok) {
+      return;
+    }
+    if (payload.rating != null) {
+      return;
+    }
+    document.querySelectorAll(".star-rating-form").forEach((form) => {
+      if (form instanceof HTMLFormElement) {
+        clearStarFormUI(form);
+      }
     });
   };
 
@@ -184,14 +209,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     updateStars(form);
 
-    form.addEventListener("mousedown", (event) => {
+    const rememberPriorChecked = (event) => {
       const choice = starChoiceForEvent(form, event.target);
       const input = choice?.querySelector("input[type='radio']");
       if (!(input instanceof HTMLInputElement)) {
         return;
       }
       input.dataset.priorChecked = input.checked ? "1" : "0";
-    });
+    };
+
+    form.addEventListener("mousedown", rememberPriorChecked);
+    form.addEventListener("pointerdown", rememberPriorChecked);
 
     form.addEventListener(
       "click",
@@ -204,12 +232,13 @@ document.addEventListener("DOMContentLoaded", () => {
         event.preventDefault();
         event.stopPropagation();
         form.dataset.suppressRatingChange = "1";
-        form.querySelectorAll("input[type='radio']").forEach((radio) => {
-          radio.checked = false;
-        });
-        updateStars(form);
+        clearStarFormUI(form);
         try {
           const { payload, response } = await submitStarRating(form, { clear: true });
+          if (payload.ok) {
+            clearStarFormUI(form);
+            syncStarFormsFromPayload(payload);
+          }
           if (onSaved) {
             onSaved(payload, response);
           }
@@ -217,6 +246,9 @@ document.addEventListener("DOMContentLoaded", () => {
           showToast("Rating could not be removed. Please try again.", "error");
         } finally {
           delete form.dataset.suppressRatingChange;
+          form.querySelectorAll("input[type='radio']").forEach((radio) => {
+            delete radio.dataset.priorChecked;
+          });
         }
       },
       true,
@@ -2764,6 +2796,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!payload.ok) {
       return;
     }
+    syncStarFormsFromPayload(payload);
     const summary = document.querySelector("[data-rating-summary]");
     const average = document.querySelector("[data-rating-average]");
     const averageMeter = document.querySelector("[data-average-star-meter]");

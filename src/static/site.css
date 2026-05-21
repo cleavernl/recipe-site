@@ -2412,14 +2412,19 @@ form p {
   color: #8c7a66;
 }
 
-.star-choice:hover label span[aria-hidden="true"],
-.star-choice:has(~ .star-choice:hover) label span[aria-hidden="true"],
 .star-choice.is-filled label span[aria-hidden="true"] {
   color: #f59e0b;
 }
 
-.star-choice:hover label span[aria-hidden="true"] {
-  transform: scale(1.08);
+@media (hover: hover) and (pointer: fine) {
+  .star-choice:hover label span[aria-hidden="true"],
+  .star-choice:has(~ .star-choice:hover) label span[aria-hidden="true"] {
+    color: #f59e0b;
+  }
+
+  .star-choice:hover label span[aria-hidden="true"] {
+    transform: scale(1.08);
+  }
 }
 
 .sr-only {
@@ -2641,10 +2646,15 @@ form p {
   font-size: 2.025rem;
 }
 
-.recently-made-star-rating .star-choice:hover label span[aria-hidden="true"],
-.recently-made-star-rating .star-choice:has(~ .star-choice:hover) label span[aria-hidden="true"],
 .recently-made-star-rating .star-choice.is-filled label span[aria-hidden="true"] {
   color: #fbbf24;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .recently-made-star-rating .star-choice:hover label span[aria-hidden="true"],
+  .recently-made-star-rating .star-choice:has(~ .star-choice:hover) label span[aria-hidden="true"] {
+    color: #fbbf24;
+  }
 }
 
 .recently-made-card-link {
@@ -3108,9 +3118,24 @@ form p {
 
   .ingredient-row-grid,
   .photo-row-grid,
-  .step-row-grid,
-  .tag-row-grid {
+  .step-row-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tag-row-grid {
+    align-items: center;
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) 2rem;
+  }
+
+  .tag-row-grid > div {
+    min-width: 0;
+  }
+
+  .tag-row-grid .remove-row-button {
+    align-self: center;
+    flex-shrink: 0;
+    margin-bottom: 0;
   }
 
   .ingredient-row.form-row,
@@ -3642,7 +3667,7 @@ body:has([data-make-mode]) main.container {
 
 @media (max-width: 48rem) {
   [data-make-mode] {
-    --make-dots-bar-height: 3.1rem;
+    --make-dots-bar-height: 2.5rem;
     padding-bottom: calc(var(--make-dots-bar-height) + env(safe-area-inset-bottom, 0px));
   }
 
@@ -3662,7 +3687,7 @@ body:has([data-make-mode]) main.container {
     left: 0;
     margin: 0;
     min-height: var(--make-dots-bar-height);
-    padding: 0.7rem clamp(1rem, 4vw, 3rem) calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.45rem clamp(1rem, 4vw, 3rem) calc(0.45rem + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
     z-index: 10;
