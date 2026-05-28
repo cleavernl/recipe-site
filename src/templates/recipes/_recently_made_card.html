@@ -1,12 +1,18 @@
+{% load recipe_format %}
 <article class="recently-made-card">
   <div class="recently-made-card-media-wrap">
-    {% if item.recipe.photo or item.recipe.photos.first %}
+    {% if item.recipe.photos.all %}
       <div class="recently-made-card-media">
-        {% if item.recipe.photo %}
-          <img src="{{ item.recipe.photo.url }}" alt="">
-        {% else %}
-          <img src="{{ item.recipe.photos.first.image.url }}" alt="{{ item.recipe.photos.first.caption }}" loading="lazy" decoding="async">
-        {% endif %}
+        <img
+          src="{{ item.recipe.photos.first.image|tile_image_url:320 }}"
+          alt="{{ item.recipe.photos.first.caption }}"
+          loading="lazy"
+          decoding="async"
+        >
+      </div>
+    {% elif item.recipe.photo %}
+      <div class="recently-made-card-media">
+        <img src="{{ item.recipe.photo|tile_image_url:320 }}" alt="" loading="lazy" decoding="async">
       </div>
     {% else %}
       <div class="recently-made-card-media recently-made-card-media-empty"><span>No photo</span></div>

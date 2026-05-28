@@ -30,6 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setTheme(themeToggle.checked ? "dark" : "light");
   });
 
+  const mobileSiteNavMq = window.matchMedia("(max-width: 760px)");
+
   document.querySelectorAll("[data-site-nav-menu]").forEach((menu) => {
     if (!(menu instanceof HTMLDetailsElement)) {
       return;
@@ -38,14 +40,31 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!(panel instanceof HTMLElement)) {
       return;
     }
+
+    const syncSiteNavOpenState = () => {
+      menu.open = !mobileSiteNavMq.matches;
+    };
+
+    syncSiteNavOpenState();
+    mobileSiteNavMq.addEventListener("change", syncSiteNavOpenState);
+    menu.addEventListener("toggle", () => {
+      if (!mobileSiteNavMq.matches && !menu.open) {
+        menu.open = true;
+      }
+    });
+
     panel.querySelectorAll("a[href]").forEach((link) => {
       link.addEventListener("click", () => {
-        menu.open = false;
+        if (mobileSiteNavMq.matches) {
+          menu.open = false;
+        }
       });
     });
     panel.querySelectorAll("button[type='submit']").forEach((button) => {
       button.addEventListener("click", () => {
-        menu.open = false;
+        if (mobileSiteNavMq.matches) {
+          menu.open = false;
+        }
       });
     });
   });
@@ -1587,6 +1606,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  const loadCarouselSlideImage = (slide) => {
+    const image = slide.querySelector("img");
+    if (!image || image.getAttribute("src")) {
+      return;
+    }
+    const dataSrc = image.getAttribute("data-src");
+    if (!dataSrc) {
+      return;
+    }
+    image.setAttribute("src", dataSrc);
+    image.removeAttribute("data-src");
+  };
+
   const initRecipeCarousels = (root) => {
     root.querySelectorAll("[data-recipe-carousel]").forEach((carousel) => {
       const slides = Array.from(carousel.querySelectorAll("[data-carousel-slide]"));
@@ -1599,10 +1631,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const show = (nextIndex) => {
         slides.forEach((slide, slideIndex) => {
-          slide.classList.toggle("is-active", slideIndex === nextIndex);
+          const isActive = slideIndex === nextIndex;
+          slide.classList.toggle("is-active", isActive);
+          if (isActive) {
+            loadCarouselSlideImage(slide);
+          }
         });
         index = nextIndex;
       };
+
+      loadCarouselSlideImage(slides[index] ?? slides[0]);
 
       prevButton?.addEventListener("click", (event) => {
         event.preventDefault();
@@ -1640,31 +1678,35 @@ document.addEventListener("DOMContentLoaded", () => {
       if (existing instanceof ResizeObserver) {
         existing.disconnect();
       }
+      delete overflowRoot.dataset.overflowOrdered;
+
+      const isSearchOverflow = overflowRoot.classList.contains("tag-overflow--search");
+      const isOverflowClone = (el) => el.dataset.tagOverflowClone === "1";
 
       const ensureOrder = () => {
         if (overflowRoot.dataset.overflowOrdered === "1") {
           return;
         }
-        [...row.children, ...panel.children].forEach((child, index) => {
+        const source = isSearchOverflow
+          ? [...row.children, ...panel.children]
+          : [...row.children];
+        source.filter((child) => !isOverflowClone(child)).forEach((child, index) => {
           child.dataset.overflowOrder = String(index);
         });
         overflowRoot.dataset.overflowOrdered = "1";
       };
 
-      const collectOrdered = () =>
-        [...row.children, ...panel.children].sort(
-          (a, b) =>
-            Number.parseInt(a.dataset.overflowOrder || "0", 10) -
-            Number.parseInt(b.dataset.overflowOrder || "0", 10),
-        );
-
-      const consolidateToRow = () => {
-        const ordered = collectOrdered();
-        panel.replaceChildren();
-        row.replaceChildren();
-        ordered.forEach((el) => {
-          row.append(el);
-        });
+      const collectOrdered = () => {
+        const source = isSearchOverflow
+          ? [...row.children, ...panel.children]
+          : [...row.children];
+        return source
+          .filter((child) => !isOverflowClone(child) && child.dataset.overflowOrder !== undefined)
+          .sort(
+            (a, b) =>
+              Number.parseInt(a.dataset.overflowOrder || "0", 10) -
+              Number.parseInt(b.dataset.overflowOrder || "0", 10),
+          );
       };
 
       const syncCountAndLabel = (count) => {
@@ -1682,68 +1724,275 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       };
 
-      const rowFitsWithOverflowControl = () => {
-        if (details.hidden) {
-          return row.scrollWidth <= row.clientWidth + 1;
+      const dedupeOrderedTags = (tags) => {
+        const byOrder = new Map();
+        tags.forEach((tag) => {
+          const order = tag.dataset.overflowOrder;
+          if (order === undefined || byOrder.has(order)) {
+            tag.remove();
+            return;
+          }
+          byOrder.set(order, tag);
+        });
+        return [...byOrder.values()].sort(
+          (a, b) =>
+            Number.parseInt(a.dataset.overflowOrder || "0", 10) -
+            Number.parseInt(b.dataset.overflowOrder || "0", 10),
+        );
+      };
+
+      const ensureAllInRow = () => {
+        row.querySelectorAll('[data-tag-overflow-clone="1"]').forEach((clone) => {
+          clone.remove();
+        });
+        const ordered = dedupeOrderedTags(collectOrdered());
+        panel.replaceChildren();
+        row.replaceChildren();
+        ordered.forEach((el) => {
+          el.removeAttribute("hidden");
+          row.append(el);
+        });
+      };
+
+      const applySearchSplit = (visibleCount, hiddenCount) => {
+        const ordered = collectOrdered();
+        const visible = ordered.slice(0, visibleCount);
+        const hidden = ordered.slice(visibleCount);
+        row.replaceChildren();
+        panel.replaceChildren();
+        visible.forEach((el) => {
+          row.append(el);
+        });
+        hidden.forEach((el) => {
+          panel.append(el);
+        });
+        syncCountAndLabel(hiddenCount);
+      };
+
+      const setCardTagVisibility = (ordered, visibleCount) => {
+        ordered.forEach((tag, index) => {
+          if (index >= visibleCount) {
+            tag.setAttribute("hidden", "");
+          } else {
+            tag.removeAttribute("hidden");
+          }
+        });
+      };
+
+      const syncCardOverflowPanel = (ordered, hiddenCount) => {
+        const visibleCount = ordered.length - hiddenCount;
+        setCardTagVisibility(ordered, visibleCount);
+        panel.replaceChildren();
+        ordered.slice(visibleCount).forEach((tag) => {
+          const clone = tag.cloneNode(true);
+          clone.dataset.tagOverflowClone = "1";
+          clone.removeAttribute("data-overflow-order");
+          clone.removeAttribute("hidden");
+          panel.append(clone);
+        });
+        syncCountAndLabel(hiddenCount);
+      };
+
+      const TAG_OVERFLOW_WIDTH_BUCKET_PX = 8;
+      const TAG_OVERFLOW_FIT_PAD_PX = 2;
+      const TAG_OVERFLOW_COLLAPSE_HYSTERESIS_PX = 16;
+
+      const forceReflow = () => {
+        void row.offsetHeight;
+      };
+
+      const mainGap = () =>
+        Number.parseFloat(window.getComputedStyle(main).columnGap || "") || 0;
+
+      const rowGap = () => Number.parseFloat(window.getComputedStyle(row).gap || "") || 0;
+
+      const prefixWidth = (widths, count, gap) => {
+        if (count <= 0) {
+          return 0;
         }
-        const gap = Number.parseFloat(window.getComputedStyle(main).columnGap || "") || 0;
-        const reserved = details.offsetWidth + gap;
-        const maxRowWidth = Math.max(0, main.clientWidth - reserved);
-        return row.scrollWidth <= maxRowWidth + 1;
+        let total = 0;
+        for (let index = 0; index < count; index += 1) {
+          if (index > 0) {
+            total += gap;
+          }
+          total += widths[index];
+        }
+        return total;
+      };
+
+      const measureTagWidths = (ordered) =>
+        ordered.map((tag) => Math.ceil(tag.getBoundingClientRect().width));
+
+      const measureOverflowControlWidth = (hiddenCount) => {
+        const countEl = overflowRoot.querySelector("[data-tag-overflow-count]");
+        const wasHidden = details.hidden;
+        const wasOpen = details.open;
+        const prevPosition = details.style.position;
+        const prevVisibility = details.style.visibility;
+        const prevPointerEvents = details.style.pointerEvents;
+        if (countEl) {
+          countEl.textContent = String(Math.max(1, hiddenCount));
+        }
+        details.hidden = false;
+        details.open = false;
+        details.style.position = "absolute";
+        details.style.visibility = "hidden";
+        details.style.pointerEvents = "none";
+        const reserved = Math.ceil(details.offsetWidth) + mainGap();
+        details.style.position = prevPosition;
+        details.style.visibility = prevVisibility;
+        details.style.pointerEvents = prevPointerEvents;
+        details.hidden = wasHidden;
+        details.open = wasOpen;
+        return reserved;
+      };
+
+      const computeHiddenCount = (tagCount, widths, rowWidthFull, gap, wasOverflowActive) => {
+        const collapseSlack = wasOverflowActive
+          ? -TAG_OVERFLOW_COLLAPSE_HYSTERESIS_PX
+          : TAG_OVERFLOW_FIT_PAD_PX;
+        const allTagsWidth = prefixWidth(widths, tagCount, gap);
+        if (allTagsWidth <= rowWidthFull + collapseSlack) {
+          return 0;
+        }
+        for (let visible = tagCount; visible >= 1; visible -= 1) {
+          const hidden = tagCount - visible;
+          if (hidden === 0) {
+            continue;
+          }
+          const reserved = measureOverflowControlWidth(hidden);
+          const available = Math.max(0, rowWidthFull - reserved);
+          if (prefixWidth(widths, visible, gap) <= available + TAG_OVERFLOW_FIT_PAD_PX) {
+            return hidden;
+          }
+        }
+        return Math.max(1, tagCount - 1);
+      };
+
+      const rowFitsWithCurrentVisibility = () =>
+        Math.ceil(row.scrollWidth) <= Math.floor(row.clientWidth) + 4;
+
+      const refineHiddenCountWithLayout = (tags, tagCount, hiddenCount) => {
+        if (hiddenCount <= 0) {
+          return 0;
+        }
+        for (let tryHidden = 0; tryHidden < hiddenCount; tryHidden += 1) {
+          const visible = tagCount - tryHidden;
+          if (isSearchOverflow) {
+            applySearchSplit(visible, tryHidden);
+          } else {
+            ensureAllInRow();
+            setCardTagVisibility(tags, visible);
+          }
+          details.hidden = tryHidden === 0;
+          if (tryHidden > 0) {
+            details.hidden = false;
+            syncCountAndLabel(tryHidden);
+          }
+          forceReflow();
+          if (rowFitsWithCurrentVisibility()) {
+            return tryHidden;
+          }
+        }
+        return hiddenCount;
+      };
+
+      let layoutScheduled = false;
+      const scheduleLayout = () => {
+        if (layoutScheduled) {
+          return;
+        }
+        layoutScheduled = true;
+        window.requestAnimationFrame(() => {
+          layoutScheduled = false;
+          layout();
+        });
       };
 
       const layout = () => {
         ensureOrder();
-        consolidateToRow();
+        const ordered = collectOrdered();
+        const totalTags = ordered.length;
+        const wasOverflowActive = overflowRoot.dataset.tagOverflowActive === "1";
+        const widthBucket = Math.floor(main.clientWidth / TAG_OVERFLOW_WIDTH_BUCKET_PX);
+        const prevBucket = overflowRoot.dataset.tagOverflowWidthBucket || "";
+        const prevTotal = overflowRoot.dataset.tagOverflowTotal || "";
         details.open = false;
 
         if (main.clientWidth < 40) {
+          ensureAllInRow();
           details.hidden = true;
+          overflowRoot.dataset.tagOverflowActive = "";
+          overflowRoot.dataset.tagOverflowWidthBucket = String(widthBucket);
+          overflowRoot.dataset.tagOverflowTotal = String(totalTags);
+          overflowRoot.dataset.tagOverflowHiddenCount = "0";
+          overflowRoot.dataset.tagOverflowLayoutDone = "1";
           syncCountAndLabel(0);
           return;
         }
 
-        details.hidden = false;
-
-        if (rowFitsWithOverflowControl()) {
+        if (totalTags === 0) {
+          ensureAllInRow();
           details.hidden = true;
+          overflowRoot.dataset.tagOverflowActive = "";
+          overflowRoot.dataset.tagOverflowWidthBucket = String(widthBucket);
+          overflowRoot.dataset.tagOverflowTotal = "0";
+          overflowRoot.dataset.tagOverflowHiddenCount = "0";
+          overflowRoot.dataset.tagOverflowLayoutDone = "1";
           syncCountAndLabel(0);
           return;
         }
 
-        let guard = 0;
-        while (!rowFitsWithOverflowControl() && row.children.length > 0 && guard < 240) {
-          const widthBefore = row.scrollWidth;
-          const last = row.lastElementChild;
-          if (!last) {
-            break;
-          }
-          panel.prepend(last);
-          syncCountAndLabel(panel.childElementCount);
-          if (row.scrollWidth >= widthBefore) {
-            row.append(last);
-            syncCountAndLabel(panel.childElementCount);
-            break;
-          }
-          guard += 1;
+        if (
+          prevBucket === String(widthBucket) &&
+          prevTotal === String(totalTags) &&
+          overflowRoot.dataset.tagOverflowLayoutDone === "1"
+        ) {
+          return;
         }
 
-        if (panel.childElementCount === 0) {
+        ensureAllInRow();
+        const tags = collectOrdered();
+        const tagCount = tags.length;
+        details.hidden = true;
+        forceReflow();
+
+        const gap = rowGap();
+        const widths = measureTagWidths(tags);
+        const rowWidthFull = Math.floor(row.clientWidth);
+        let hiddenCount = computeHiddenCount(tagCount, widths, rowWidthFull, gap, wasOverflowActive);
+        hiddenCount = refineHiddenCountWithLayout(tags, tagCount, hiddenCount);
+
+        if (hiddenCount === 0) {
+          ensureAllInRow();
+          if (!isSearchOverflow) {
+            setCardTagVisibility(tags, tags.length);
+          }
           details.hidden = true;
           details.open = false;
+          overflowRoot.dataset.tagOverflowActive = "";
           syncCountAndLabel(0);
         } else {
           details.hidden = false;
-          syncCountAndLabel(panel.childElementCount);
+          overflowRoot.dataset.tagOverflowActive = "1";
+          if (isSearchOverflow) {
+            applySearchSplit(tagCount - hiddenCount, hiddenCount);
+          } else {
+            ensureAllInRow();
+            syncCardOverflowPanel(tags, hiddenCount);
+          }
         }
+
+        overflowRoot.dataset.tagOverflowWidthBucket = String(widthBucket);
+        overflowRoot.dataset.tagOverflowTotal = String(tagCount);
+        overflowRoot.dataset.tagOverflowHiddenCount = String(hiddenCount);
+        overflowRoot.dataset.tagOverflowLayoutDone = "1";
       };
 
-      const ro = new ResizeObserver(() => {
-        window.requestAnimationFrame(layout);
-      });
+      const ro = new ResizeObserver(scheduleLayout);
       overflowRoot[tagOverflowResizeObserver] = ro;
       ro.observe(main);
-      window.requestAnimationFrame(layout);
+      scheduleLayout();
 
       const summary = details.querySelector("summary");
       if (summary instanceof HTMLElement) {

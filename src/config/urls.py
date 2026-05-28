@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import include, path, reverse_lazy
 from django.views.generic import RedirectView
 
-from config.views import serve_protected_media
+from config.views import serve_protected_media, serve_protected_thumbnail
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="recipes:list", permanent=False), name="home"),
@@ -25,6 +25,11 @@ urlpatterns = [
         name="password_change",
     ),
     path("recipes/", include("recipes.urls")),
+    path(
+        "media/thumb/<int:max_width>/<path:path>",
+        login_required(serve_protected_thumbnail),
+        name="protected_thumbnail",
+    ),
     path(
         "media/<path:path>",
         login_required(serve_protected_media),

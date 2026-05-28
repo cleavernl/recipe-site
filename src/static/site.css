@@ -217,6 +217,13 @@ select:focus-visible {
   gap: 0.45rem;
 }
 
+/* Closed <details> hides non-summary children in the UA stylesheet; keep links visible on wide layouts. */
+@media (min-width: 761px) {
+  .site-nav-menu:not([open]) .site-nav-menu-panel {
+    display: flex;
+  }
+}
+
 .site-header .site-nav-menu-panel a,
 .site-header .site-nav-menu-panel .inline button {
   border-radius: 999px;
@@ -1148,15 +1155,19 @@ select:focus-visible {
   background: var(--card-muted);
   border: 1px solid var(--border);
   border-radius: 999px;
+  box-sizing: border-box;
   color: var(--muted);
   cursor: pointer;
   font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1.2;
   list-style: none;
   margin: 0;
+  min-width: 2.75rem;
   padding: 0.38rem 0.65rem;
+  text-align: center;
   user-select: none;
 }
 

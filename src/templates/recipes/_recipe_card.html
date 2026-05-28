@@ -1,25 +1,30 @@
+{% load recipe_format %}
 <article class="recipe-card">
   <a class="recipe-card-link" href="{{ recipe.get_absolute_url }}" aria-label="View {{ recipe.title }}">
-    {% if recipe.photo or recipe.photos.first %}
+    {% if recipe.photos.all %}
       <section class="recipe-card-media recipe-tile-carousel" data-recipe-carousel>
         <div class="recipe-carousel-track">
-          {% if recipe.photo %}
-            <figure class="recipe-carousel-slide is-active" data-carousel-slide>
-              <img src="{{ recipe.photo.url }}" alt="">
-            </figure>
-          {% endif %}
           {% for photo in recipe.photos.all %}
-            <figure class="recipe-carousel-slide{% if not recipe.photo and forloop.first %} is-active{% endif %}" data-carousel-slide>
-              <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" loading="lazy" decoding="async">
+            <figure class="recipe-carousel-slide{% if forloop.first %} is-active{% endif %}" data-carousel-slide>
+              <img
+                {% if forloop.first %}src{% else %}data-src{% endif %}="{{ photo.image|tile_image_url }}"
+                alt="{{ photo.caption }}"
+                loading="lazy"
+                decoding="async"
+              >
             </figure>
           {% endfor %}
         </div>
-        {% if recipe.photo and recipe.photos.first or recipe.photos.count > 1 %}
+        {% if recipe.photos.count > 1 %}
           <div class="carousel-controls">
             <button class="icon-button" type="button" data-carousel-prev aria-label="Previous photo">‹</button>
             <button class="icon-button" type="button" data-carousel-next aria-label="Next photo">›</button>
           </div>
         {% endif %}
+      </section>
+    {% elif recipe.photo %}
+      <section class="recipe-card-media">
+        <img src="{{ recipe.photo|tile_image_url }}" alt="" loading="lazy" decoding="async">
       </section>
     {% else %}
       <div class="recipe-card-media recipe-card-media-empty"><span>No photo yet</span></div>

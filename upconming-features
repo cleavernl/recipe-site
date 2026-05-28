@@ -1,8 +1,33 @@
 - Import recipe from URL
-- Tag recipes and filter by tags
-- Sort recipes by things like cook time, rating, etc.
-- Add a "randomize" button that picks a random recipe
-- Add a "make it" mode where you can check things off
-    - We can store a log of who made recipes when
-    - We can order the default sorting of the home page with the recipes made most recently
+
+- Mobile UI cleanup
+
+- Add homepage sorting based on most recently added recipes
+- Add homepage sorting based on most recently made recipes
+    - Make this the default
+
+- Recipe versions
+    - Anyone can make an edit and, once saved it should ask if this should bake a new recipe version
+    - previous recipe versions should be visible
+    - Allow you to make a suggestion to the recipe after finishing make it mode to create a new version
+    - Different versions of recipes should have different rating averages
+    - Comments left on a recipe should have a mark to show which version of the recipe they were left on
+    - Ratings left on a recipe should have a mark to show which version of the recipe they were left on
+
+- More on comments
+    - Suggestion comments
+    - Tip comments
+    - Allow you to edit your own comments
+    - Allow you to delete your own comments
+
 - Add an export to AnyList option
+
+- recent activity feed
+    - Recipes made
+    - Recipes edited
+    - Recipes deleted
+    - Recipes restored
+    - Recipes tagged
+    - Recipes rated
+    - Recipes commented on
+    - Recipes suggested
