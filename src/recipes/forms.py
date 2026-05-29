@@ -70,7 +70,7 @@ class RecipeTagLineForm(forms.Form):
 
     def clean_tag_name(self) -> str:
         raw = self.cleaned_data.get("tag_name") or ""
-        return " ".join(str(raw).split()).strip()[:64]
+        return " ".join(str(raw).split()).strip().lower()[:64]
 
 
 class RecipeTagLineFormSetClass(BaseFormSet):

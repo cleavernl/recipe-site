@@ -2847,13 +2847,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!inFilters) {
           return;
         }
+        const btn =
+          event.target instanceof Element ? event.target.closest(".search-tag-chip") : null;
         if (
+          !btn &&
           event.target instanceof Element &&
           event.target.closest(".tag-overflow-summary, [data-tag-overflow-details]")
         ) {
           return;
         }
-        const btn = event.target.closest(".search-tag-chip");
         const tagHiddenRoot = getTagHiddenRoot();
         if (!(btn instanceof HTMLButtonElement) || !tagHiddenRoot) {
           return;

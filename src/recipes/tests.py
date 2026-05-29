@@ -525,7 +525,7 @@ class RecipeWorkflowTests(TestCase):
         recipe = Recipe.objects.create(owner=self.owner, title="Tagged Dish")
         sync_recipe_tags(recipe, "vegan, VEGAN, Vegan")
         self.assertEqual(recipe.tags.count(), 1)
-        self.assertEqual(recipe.tags.get().name, "Vegan")
+        self.assertEqual(recipe.tags.get().name, "vegan")
 
     def test_recipe_tag_formset_similar_tag_adds_recommendation_note(self):
         Tag.objects.create(name="Dessert", slug="dessert")
@@ -540,7 +540,7 @@ class RecipeWorkflowTests(TestCase):
             prefix="tags",
         )
         self.assertTrue(fs.is_valid())
-        self.assertTrue(any("Dessert" in note for note in fs.similar_tag_notes))
+        self.assertTrue(any("dessert" in note for note in fs.similar_tag_notes))
 
     def test_recipe_tag_formset_similar_broring_when_typo_boring(self):
         Tag.objects.create(name="Broring", slug="broring")
@@ -555,7 +555,7 @@ class RecipeWorkflowTests(TestCase):
             prefix="tags",
         )
         self.assertTrue(fs.is_valid())
-        self.assertTrue(any("Broring" in note for note in fs.similar_tag_notes))
+        self.assertTrue(any("broring" in note for note in fs.similar_tag_notes))
 
     def test_owner_can_quick_add_tag_from_detail(self):
         self.client.force_login(self.owner)
@@ -586,7 +586,7 @@ class RecipeWorkflowTests(TestCase):
         self.assertTrue(data["need_confirm"])
         self.assertEqual(len(data["pairs"]), 1)
         self.assertEqual(data["pairs"][0]["typed"], "boring")
-        self.assertEqual(data["pairs"][0]["suggested"], "Broring")
+        self.assertEqual(data["pairs"][0]["suggested"], "broring")
 
     def test_quick_add_similar_tag_accepted_uses_suggested(self):
         Tag.objects.create(name="Broring", slug="broring")
@@ -599,7 +599,7 @@ class RecipeWorkflowTests(TestCase):
         )
         self.assertRedirects(response, self.recipe.get_absolute_url())
         self.recipe.refresh_from_db()
-        self.assertTrue(self.recipe.tags.filter(name__iexact="Broring").exists())
+        self.assertTrue(self.recipe.tags.filter(name__iexact="broring").exists())
 
     def test_quick_add_similar_tag_skipped_keeps_typed_name(self):
         Tag.objects.create(name="Broring", slug="broring")
@@ -612,9 +612,9 @@ class RecipeWorkflowTests(TestCase):
         )
         self.assertRedirects(response, self.recipe.get_absolute_url())
         self.recipe.refresh_from_db()
-        self.assertTrue(self.recipe.tags.filter(name__iexact="boring").exists())
-        self.assertFalse(self.recipe.tags.filter(name__iexact="Broring").exists())
-        self.assertTrue(Tag.objects.filter(name__iexact="Broring").exists())
+        self.assertTrue(self.recipe.tags.filter(name="boring").exists())
+        self.assertFalse(self.recipe.tags.filter(name="broring").exists())
+        self.assertTrue(Tag.objects.filter(name="broring").exists())
 
     def test_quick_add_duplicate_tag_shows_message(self):
         tag = Tag.objects.create(name="Brunch", slug="brunch")
@@ -673,7 +673,7 @@ class RecipeWorkflowTests(TestCase):
         self.assertRegex(
             body,
             (
-                r'data-tag-slug="snack"[^>]*>[\s\n]*Snack\s*'
+                r'data-tag-slug="snack"[^>]*>[\s\n]*snack\s*'
                 r'<span class="search-tag-chip-count">\s*\(2\)\s*</span>'
             ),
         )

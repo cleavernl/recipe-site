@@ -21,25 +21,29 @@ class Tag(models.Model):
 
     @classmethod
     def get_or_create_for_name(cls, name: str) -> Tag:
-        cleaned = " ".join(str(name).split()).strip()
+        cleaned = " ".join(str(name).split()).strip().lower()
         if not cleaned:
             msg = "Tag name cannot be empty."
             raise ValueError(msg)
         cleaned = cleaned[:64]
         existing = cls.objects.filter(name__iexact=cleaned).first()
         if existing:
+            if existing.name != cleaned:
+                existing.name = cleaned
+                existing.save(update_fields=["name"])
             return existing
-        slug = (slugify(cleaned.lower()) or "tag")[:72]
+        slug = (slugify(cleaned) or "tag")[:72]
         tag, _ = cls.objects.get_or_create(slug=slug, defaults={"name": cleaned})
         return tag
 
     def save(self, *args, **kwargs) -> None:
+        self.name = " ".join(str(self.name).split()).lower()[:64]
         if not self.slug:
             self.slug = self._make_unique_slug()
         super().save(*args, **kwargs)
 
     def _make_unique_slug(self) -> str:
-        base = (slugify(self.name.lower()) or "tag")[:72]
+        base = (slugify(self.name) or "tag")[:72]
         slug = base
         counter = 2
         while Tag.objects.filter(slug=slug).exclude(pk=self.pk).exists():
@@ -54,7 +58,7 @@ def parse_recipe_tag_names(raw: str, *, max_tags: int = 40) -> list[str]:
         return []
     names: list[str] = []
     for chunk in str(raw).replace("\n", ",").split(","):
-        name = " ".join(chunk.split()).strip()
+        name = " ".join(chunk.split()).strip().lower()
         if not name:
             continue
         if len(name) > 64:
