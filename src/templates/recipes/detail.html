@@ -82,14 +82,14 @@
     {% endif %}
 
     {% if recipe.photo %}
-      <img class="hero-photo" src="{{ recipe.photo.url }}" alt="">
+      {% include "recipes/_recipe_image.html" with src=recipe.photo.url alt="" frame_class="hero-photo-frame" img_class="hero-photo" %}
     {% endif %}
 
     {% if recipe.photos.all %}
       <section class="photo-gallery" aria-label="Recipe photos">
         {% for photo in recipe.photos.all %}
           <figure>
-            <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" loading="lazy" decoding="async">
+            {% include "recipes/_recipe_image.html" with src=photo.image.url alt=photo.caption frame_class="photo-gallery-frame" lazy=True %}
             {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
           </figure>
         {% endfor %}

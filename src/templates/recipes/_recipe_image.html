@@ -1,0 +1,9 @@
+<div class="image-load-frame {{ frame_class }}" data-image-load-frame>
+  <div class="image-load-skeleton" aria-hidden="true"></div>
+  <img
+    {% if img_class %}class="{{ img_class }}"{% endif %}
+    src="{{ src }}"
+    alt="{{ alt|default:'' }}"
+    {% if lazy %}loading="lazy" decoding="async"{% endif %}
+  >
+</div>

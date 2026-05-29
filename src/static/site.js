@@ -3404,6 +3404,32 @@ document.addEventListener("DOMContentLoaded", () => {
   initRecipeEditSimilarTagModal();
   initRecipeQuickTagSimilarConfirm();
 
+  const initImageLoadFrames = (root = document) => {
+    root.querySelectorAll("[data-image-load-frame]").forEach((frame) => {
+      if (!(frame instanceof HTMLElement)) {
+        return;
+      }
+      const img = frame.querySelector("img");
+      if (!(img instanceof HTMLImageElement)) {
+        return;
+      }
+
+      const markLoaded = () => {
+        frame.classList.add("is-loaded");
+      };
+
+      if (img.complete) {
+        markLoaded();
+        return;
+      }
+
+      img.addEventListener("load", markLoaded, { once: true });
+      img.addEventListener("error", markLoaded, { once: true });
+    });
+  };
+
+  initImageLoadFrames(document);
+
   const promptReviewSection = document.querySelector("[data-prompt-review]");
   if (promptReviewSection instanceof HTMLElement) {
     promptReviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
