@@ -163,12 +163,34 @@ class ExistingRowsSingleExtraFormSet(BaseInlineFormSet):
             self.extra = self.extra_for_new
 
 
+def expand_inline_formset_for_import_initial(
+    formset: BaseInlineFormSet,
+    initial_rows: list,
+) -> None:
+    """Unsaved inline formsets count forms from the queryset (empty), not len(initial)."""
+    if initial_rows:
+        formset.extra = len(initial_rows) + formset.extra_for_new
+
+
 class IngredientFormSetClass(ExistingRowsSingleExtraFormSet):
     extra_for_new = 1
 
 
 class InstructionStepFormSetClass(ExistingRowsSingleExtraFormSet):
     extra_for_new = 1
+
+
+class RecipeImportUrlForm(forms.Form):
+    url = forms.URLField(
+        label="Recipe URL",
+        assume_scheme="https",
+        widget=forms.URLInput(
+            attrs={
+                "placeholder": "https://example.com/your-recipe",
+                "inputmode": "url",
+            },
+        ),
+    )
 
 
 class RecipeForm(forms.ModelForm):
@@ -274,11 +296,54 @@ class RecipePhotoForm(OptionalOrderMixin, forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, staged_path: str = "", staged_preview_url: str = "", **kwargs):
+        self.staged_path = staged_path.strip()
+        self.staged_preview_url = staged_preview_url.strip()
+        super().__init__(*args, **kwargs)
+        self.fields["image"].required = False
+
+    def _is_marked_delete(self) -> bool:
+        if not self.data:
+            return False
+        raw = self.data.get(self.add_prefix("DELETE"), "")
+        return str(raw).strip().lower() in {"on", "true", "1", "yes", "y"}
+
+    def clean(self):
+        if self._is_marked_delete():
+            return {"DELETE": True}
+        cleaned = super().clean()
+        if cleaned.get("DELETE"):
+            return cleaned
+        staged = (self.data.get(self.add_prefix("staged_path")) or "").strip()
+        has_upload = bool(cleaned.get("image"))
+        has_caption = bool((cleaned.get("caption") or "").strip())
+        if not has_upload and not staged and not has_caption and not self.instance.pk:
+            return cleaned
+        if not has_upload and not staged and not self.instance.image:
+            raise ValidationError("Add a photo or remove this row.")
+        return cleaned
+
+
+class RecipePhotoFormSetClass(BaseInlineFormSet):
+    def __init__(self, *args, staged_photos: list[dict[str, str]] | None = None, **kwargs):
+        self.staged_photos = list(staged_photos or [])
+        super().__init__(*args, **kwargs)
+        if self.staged_photos and not self.is_bound:
+            self.extra = len(self.staged_photos) + 1
+
+    def _construct_form(self, i, **kwargs):
+        if self.staged_photos and i < len(self.staged_photos) and not self.is_bound:
+            photo = self.staged_photos[i]
+            kwargs.setdefault("staged_path", photo.get("storage_path", ""))
+            kwargs.setdefault("staged_preview_url", photo.get("preview_url", ""))
+        return super()._construct_form(i, **kwargs)
+
 
 RecipePhotoFormSet = inlineformset_factory(
     Recipe,
     RecipePhoto,
     form=RecipePhotoForm,
+    formset=RecipePhotoFormSetClass,
     extra=1,
     can_delete=True,
 )

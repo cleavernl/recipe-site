@@ -1403,6 +1403,52 @@ select:focus-visible {
   width: 1.15rem;
 }
 
+.recipe-import-panel {
+  background: color-mix(in srgb, var(--field-bg) 88%, var(--accent) 12%);
+  border: 1px solid #dcc6af;
+  border-radius: 20px;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.recipe-import-heading {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.45rem;
+}
+
+.recipe-import-help {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 0 0 0.85rem;
+}
+
+.recipe-import-fields {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.recipe-import-url-field {
+  margin: 0;
+}
+
+.recipe-import-url-field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .recipe-import-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .auth-card {
   margin-top: clamp(1rem, 8vh, 4rem);
 }

@@ -10,6 +10,7 @@ urlpatterns = [
     path("", views.RecipeListView.as_view(), name="list"),
     path("random/", views.RandomRecipeView.as_view(), name="random"),
     path("new/", views.RecipeCreateView.as_view(), name="create"),
+    path("new/import/", views.RecipeImportFromUrlView.as_view(), name="import_url"),
     path(
         "recently-deleted/",
         views.RecentlyDeletedRecipeListView.as_view(),

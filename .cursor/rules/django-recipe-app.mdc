@@ -13,5 +13,5 @@ alwaysApply: false
 - Source `scripts/project-env.sh` before local `uv`, Python, test, or management commands so tooling stays inside `recipe-site-home`.
 - When a change creates or modifies migrations, run the needed `uv run python manage.py migrate` command before handing the feature back, unless the user explicitly asks not to touch the local database.
 - Keep `scripts/start-web.sh` as the shared local startup script and container entrypoint for deployed pods.
-- Do not add external recipe scraping/import dependencies until the robust importer is intentionally designed. Store `source_url` as the MVP import placeholder.
+- Do not add external recipe scraping/import dependencies without an explicit decision record. URL import uses stdlib fetch plus schema.org JSON-LD parsing (`src/recipes/url_import.py`; see decision 0005). When changing URL import parsing, follow `.cursor/rules/url-import-parsing.mdc` and run the relevant pytest modules under `src/recipes/`.
 - Add or update Django tests for invite access, permission behavior, form workflows, and user-facing recipe changes.

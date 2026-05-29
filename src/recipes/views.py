@@ -13,7 +13,18 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Avg, Count, Exists, ExpressionWrapper, F, IntegerField, Max, OuterRef, Q, Subquery
+from django.db.models import (
+    Avg,
+    Count,
+    Exists,
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    Max,
+    OuterRef,
+    Q,
+    Subquery,
+)
 from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -30,13 +41,24 @@ from recipes.forms import (
     InstructionStepFormSet,
     RatingForm,
     RecipeForm,
+    RecipeImportUrlForm,
     RecipePhotoFormSet,
     RecipeQuickAddTagForm,
     RecipeTagLineFormSet,
+    expand_inline_formset_for_import_initial,
     similar_tag_pairs_for_names,
 )
 from recipes.models import Rating, Recipe, RecipeMade, Tag, sync_recipe_tags
 from recipes.photo_sync import sync_legacy_recipe_photo_to_gallery
+from recipes.url_import import (
+    RECIPE_URL_IMPORT_SESSION_KEY,
+    attach_staged_photo_to_recipe,
+    cleanup_staged_photos,
+    draft_form_initial_from_document,
+    fetch_and_parse_recipe_url,
+    new_staging_token,
+)
+from recipes.yaml_import import RecipeImportError
 
 
 class PrivateRecipeMixin(LoginRequiredMixin):
@@ -772,14 +794,135 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
         photo_formset.instance = recipe
         ingredient_formset.save()
         step_formset.save()
-        photo_formset.save()
+        self.save_photo_formset(recipe, photo_formset)
         sync_recipe_tags(recipe, ", ".join(tag_formset.ordered_tag_names()))
         messages.success(self.request, "Recipe saved.")
         return redirect(recipe)
 
+    def _photo_form_marked_delete(self, form) -> bool:
+        if hasattr(form, "cleaned_data") and form.cleaned_data.get("DELETE"):
+            return True
+        raw = (self.request.POST.get(form.add_prefix("DELETE")) or "").strip().lower()
+        return raw in {"on", "true", "1", "yes", "y"}
+
+    def save_photo_formset(self, recipe, photo_formset) -> None:
+        staged_paths: list[str] = []
+        for form in photo_formset.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            staged = (self.request.POST.get(form.add_prefix("staged_path")) or "").strip()
+            if self._photo_form_marked_delete(form):
+                if form.instance.pk:
+                    form.instance.delete()
+                if staged:
+                    staged_paths.append(staged)
+                continue
+
+            uploaded = form.cleaned_data.get("image")
+            caption = str(form.cleaned_data.get("caption") or "").strip()[:180]
+            order = form.cleaned_data.get("order")
+            order_value = order if order is not None else 0
+
+            if uploaded:
+                form.instance.recipe = recipe
+                form.save()
+                if staged:
+                    staged_paths.append(staged)
+                continue
+
+            if staged:
+                attach_staged_photo_to_recipe(
+                    recipe,
+                    staged,
+                    caption=caption,
+                    order=order_value,
+                )
+                staged_paths.append(staged)
+
+        cleanup_staged_photos(staged_paths)
+
 
 class RecipeCreateView(RecipeFormMixin):
-    pass
+    def pop_import_draft(self) -> dict | None:
+        draft = self.request.session.pop(RECIPE_URL_IMPORT_SESSION_KEY, None)
+        if isinstance(draft, dict):
+            return draft
+        return None
+
+    def get_forms(self):
+        recipe = self.get_recipe()
+        if recipe.pk:
+            sync_legacy_recipe_photo_to_gallery(recipe)
+        if self.request.method == "POST":
+            return super().get_forms()
+
+        import_draft = self.pop_import_draft()
+        if not import_draft:
+            return super().get_forms()
+
+        recipe_form = RecipeForm(instance=recipe, initial=import_draft.get("recipe", {}))
+        ingredient_initial = import_draft.get("ingredients", [])
+        ingredient_formset = IngredientFormSet(
+            instance=recipe,
+            initial=ingredient_initial,
+            prefix="ingredients",
+        )
+        expand_inline_formset_for_import_initial(ingredient_formset, ingredient_initial)
+
+        step_initial = import_draft.get("steps", [])
+        step_formset = InstructionStepFormSet(
+            instance=recipe,
+            initial=step_initial,
+            prefix="steps",
+        )
+        expand_inline_formset_for_import_initial(step_formset, step_initial)
+        staged_photos = import_draft.get("staged_photos", [])
+        photo_formset = RecipePhotoFormSet(
+            instance=recipe,
+            prefix="photos",
+            staged_photos=staged_photos,
+        )
+        tag_formset = RecipeTagLineFormSet(
+            initial=import_draft.get("tags", []),
+            prefix="tags",
+        )
+        self._import_staged_photos = staged_photos
+        return recipe_form, ingredient_formset, step_formset, photo_formset, tag_formset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["import_url_form"] = RecipeImportUrlForm()
+        return context
+
+
+class RecipeImportFromUrlView(PrivateRecipeMixin, View):
+    def post(self, request, *args, **kwargs):
+        form = RecipeImportUrlForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Enter a valid recipe URL.")
+            return redirect("recipes:create")
+
+        url = form.cleaned_data["url"]
+        try:
+            document = fetch_and_parse_recipe_url(url, stage_photos_token=new_staging_token())
+        except RecipeImportError as exc:
+            messages.error(request, str(exc))
+            return redirect("recipes:create")
+
+        request.session[RECIPE_URL_IMPORT_SESSION_KEY] = draft_form_initial_from_document(document)
+        photo_count = len(document.get("staged_photos") or [])
+        if photo_count:
+            detail = (
+                f"Imported “{document['title']}” with {photo_count} photo(s). "
+                "Review the details below, then save the recipe."
+            )
+        else:
+            detail = (
+                f"Imported “{document['title']}”. "
+                "Review the details below, then save the recipe."
+            )
+        messages.success(request, detail)
+        return redirect("recipes:create")
 
 
 class RecipeUpdateView(RecipeFormMixin):

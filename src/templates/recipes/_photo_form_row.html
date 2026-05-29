@@ -14,18 +14,28 @@
               alt=""
               data-photo-preview-image
             >
+          {% elif form.staged_preview_url %}
+            <img
+              class="photo-editor-image"
+              src="{{ form.staged_preview_url }}"
+              alt=""
+              data-photo-preview-image
+            >
           {% else %}
             <img class="photo-editor-image" src="" alt="" data-photo-preview-image hidden>
           {% endif %}
           <span
             class="photo-editor-placeholder"
             data-photo-placeholder
-            {% if form.instance.image.name %}hidden{% endif %}
+            {% if form.instance.image.name or form.staged_preview_url %}hidden{% endif %}
           >
             <span class="photo-editor-placeholder-icon" aria-hidden="true">+</span>
             <span>Add photo</span>
           </span>
         </label>
+        {% if form.staged_path %}
+          <input type="hidden" name="{{ form.prefix }}-staged_path" value="{{ form.staged_path }}">
+        {% endif %}
         {{ form.image }}
         <button
           type="button"

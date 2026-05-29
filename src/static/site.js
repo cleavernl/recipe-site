@@ -1500,6 +1500,11 @@ document.addEventListener("DOMContentLoaded", () => {
           deleteInput.checked = true;
         }
       }
+      row.querySelectorAll("input[name$='-staged_path']").forEach((input) => {
+        if (input instanceof HTMLInputElement) {
+          input.remove();
+        }
+      });
       row.classList.add("is-removed");
       syncOrder();
       ensureTrailingEmptyRow();

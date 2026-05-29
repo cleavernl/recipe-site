@@ -29,6 +29,26 @@
         </svg>
       </button>
     </div>
+    {% if import_url_form %}
+      <section class="recipe-import-panel">
+        <h2 class="recipe-import-heading">Import from URL</h2>
+        <p class="recipe-import-help">
+          Paste a link to a recipe page. We’ll pull in the title, ingredients, steps, and a photo when
+          the site publishes structured recipe data. You can review and edit everything before saving.
+        </p>
+        <form method="post" action="{% url 'recipes:import_url' %}" class="recipe-import-form">
+          {% csrf_token %}
+          <div class="recipe-import-fields">
+            <p class="recipe-import-url-field">
+              {{ import_url_form.url.label_tag }}
+              {{ import_url_form.url }}
+              {{ import_url_form.url.errors }}
+            </p>
+            <button type="submit" class="button secondary">Import</button>
+          </div>
+        </form>
+      </section>
+    {% endif %}
     <form id="recipe-edit-form" method="post" enctype="multipart/form-data" data-unsaved-warning>
       {% csrf_token %}
       {{ recipe_form.similar_tags_ack }}

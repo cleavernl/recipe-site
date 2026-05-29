@@ -1,0 +1,45 @@
+---
+description: URL-import parsing functions and required pytest verification
+globs: "src/recipes/url_import.py,src/recipes/test_ingredient_parsing.py,src/recipes/test_url_import_parsing.py,src/recipes/test_url_import.py"
+alwaysApply: false
+---
+
+# URL Import Parsing
+
+Recipe URL import logic lives in `src/recipes/url_import.py`. Parsing is split into focused regression suites—do not change import behavior without running the relevant tests.
+
+## Before finishing
+
+1. Source `scripts/project-env.sh`.
+2. **Ingredient** quantity/name/notes (regex, parens, units):
+
+```bash
+uv run pytest src/recipes/test_ingredient_parsing.py -q
+```
+
+3. **All other import parsing** (instructions, tags, JSON-LD, servings/duration, images, URL validation, document shape):
+
+```bash
+uv run pytest src/recipes/test_url_import_parsing.py -q
+```
+
+4. **Django integration** (views, photo staging on disk):
+
+```bash
+uv run pytest src/recipes/test_url_import.py -q
+```
+
+Run all three when touching shared helpers in `url_import.py`. Do not claim work is complete unless these passed, or you explain what could not run and the remaining risk.
+
+## When changing parsing rules
+
+- Add parametrized cases to the narrowest test file for the behavior you changed.
+- Prefer real strings from failing site imports (Half Baked Harvest numbered steps, RecipeTin parens, Feasting at Home tags) over synthetic-only examples.
+- Ingredient cases: assert `name` has no stray `(` or `)` when notes were parenthetical.
+- Instruction cases: cover separate `HowToStep` lists, `HowToSection`, single-string instructions, and numbered blobs (`1. … 2. …` with `\u00a0`).
+- Tag cases: `parse_import_tags` must ignore `keywords`; cover `recipeCategory` / `recipeCuisine` only.
+
+## Related context
+
+- Decision: `docs/decisions/0005-url-recipe-import.md`
+- Broader Django app rules: `.cursor/rules/django-recipe-app.mdc`

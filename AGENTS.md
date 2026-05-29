@@ -23,6 +23,7 @@ This repository is expected to be developed primarily by AI agents. Keep this fi
 ## Current Scoped Rules
 
 - `.cursor/rules/django-recipe-app.mdc`: Django app architecture, privacy defaults, permissions, and tooling.
+- `.cursor/rules/url-import-parsing.mdc`: URL import parsing suites (`test_ingredient_parsing.py`, `test_url_import_parsing.py`, `test_url_import.py`).
 - `.cursor/rules/deployment-environment.mdc`: Windows + WSL + Tailscale production context (see decision 0004).
 
 ## Production deployment (reference)
