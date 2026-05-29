@@ -56,6 +56,13 @@ uv run pytest
 uv run python manage.py check
 ```
 
+CI / tag deploy uses the same checks with verbose, paste-friendly logs:
+
+```sh
+bash scripts/ci-test.sh
+bash scripts/ci-django-check.sh
+```
+
 ## Importing Recipes
 
 The first version stores a recipe source URL but does not scrape or import recipe content from other sites. Robust link importing should be designed after the core recipe workflow has been used for a while.

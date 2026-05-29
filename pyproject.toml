@@ -29,6 +29,8 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 pythonpath = ["src"]
 testpaths = ["src"]
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
+# -ra: short summary of skips/xfail/errors/failures (also used by scripts/ci-test.sh)
+addopts = ["-ra"]
 
 [tool.ruff]
 line-length = 100

@@ -9,5 +9,6 @@ alwaysApply: true
 - Run the smallest useful verification first, then broader checks when shared behavior, user flows, or infrastructure are affected.
 - Add or update automated tests for bug fixes, user-facing behavior, data transformations, permission checks, and shared utilities.
 - Keep verification commands runnable inside the Cursor shell environment and document new commands when they are introduced.
+- Tag deploy CI uses `scripts/ci-test.sh` and `scripts/ci-django-check.sh` for verbose, paste-friendly failure logs; prefer those when reproducing a failed Actions run.
 - Do not claim verification passed unless it was actually run. If a check cannot run, explain why and name the remaining risk.
 - Prefer deterministic checks and fixtures over manual-only validation for behavior future agents may change.

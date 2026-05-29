@@ -1,5 +1,9 @@
 # Deploy production on Phantom when a version tag is pushed.
 #
+# A test job runs on ubuntu-latest first (pytest + manage.py check). Deploy only
+# runs on the self-hosted runner when that job succeeds. If tests fail, the pushed
+# v* tag is deleted from origin so failed releases do not remain in the repo.
+#
 # Each v* tag runs scripts/wsl-deploy-release.sh in RECIPE_SITE_DEPLOY_PATH:
 #   - checkout the tag (hard reset)
 #   - podman compose build --no-cache web (code, deps, collectstatic in image)
@@ -27,8 +31,61 @@ concurrency:
   group: deploy-${{ github.repository }}
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Run tests
+        id: pytest
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: bash scripts/ci-test.sh
+
+      - name: Upload pytest JUnit on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-junit-${{ github.run_id }}
+          path: pytest-results.xml
+          if-no-files-found: ignore
+
+      - name: Django system check
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: bash scripts/ci-django-check.sh
+
+      - name: Delete release tag after test failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          echo "Tests failed — removing rejected tag ${TAG} from origin."
+          if git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git push origin ":refs/tags/${TAG}"
+            echo "Deleted origin tag ${TAG}."
+          else
+            echo "Tag ${TAG} is not on origin (already removed)."
+          fi
+          echo "Fix the failures, then create and push a new version tag to deploy."
+
   deploy:
+    needs: test
     runs-on: [self-hosted, recipe-site-phantom]
     steps:
       - name: Deploy release tag to production
