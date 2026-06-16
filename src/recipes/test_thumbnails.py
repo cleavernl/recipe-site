@@ -117,3 +117,20 @@ class RecipeThumbnailTests(TestCase):
             response,
             f'/media/thumb/{TILE_IMAGE_MAX_WIDTH}/{self.recipe.photo.name}"',
         )
+
+    def test_recipe_detail_uses_full_size_image_urls(self):
+        RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile(
+                "detail-gallery.jpg",
+                make_test_jpeg(width=1200, height=900),
+                content_type="image/jpeg",
+            ),
+            order=1,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, 'src="/media/recipes/photos/detail-gallery.jpg"')
+        self.assertNotContains(response, "/media/thumb/")

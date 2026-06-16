@@ -178,6 +178,7 @@ RECIPE_LIST_SORT_LABELS = dict(RECIPE_LIST_SORT_OPTIONS)
 LIST_TAG_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 RECENTLY_MADE_HOME_LIMIT = 3
+RECENTLY_DELETED_HOME_LIMIT = 3
 
 
 class RecentlyMadeItem(NamedTuple):
@@ -185,6 +186,11 @@ class RecentlyMadeItem(NamedTuple):
     made_at: datetime
     user_rating: int | None
     rating_form: RatingForm | None
+
+
+class RecentlyDeletedItem(NamedTuple):
+    recipe: Recipe
+    deleted_at: datetime
 
 
 class RecipeListMakerFilter(NamedTuple):
@@ -393,6 +399,28 @@ def recently_made_recipes_for_user(
     return items
 
 
+def recently_deleted_recipes_for_home(
+    *,
+    limit: int = RECENTLY_DELETED_HOME_LIMIT,
+) -> tuple[list[RecentlyDeletedItem], bool]:
+    """Soft-deleted recipes for the home preview, newest first."""
+    purge_expired_deleted_recipes()
+    recipes = list(
+        current_recipes()
+        .filter(deleted_at__isnull=False)
+        .select_related("owner")
+        .prefetch_related("photos")
+        .order_by("-deleted_at", *_recipe_title_order())[: limit + 1],
+    )
+    has_more = len(recipes) > limit
+    items = [
+        RecentlyDeletedItem(recipe=recipe, deleted_at=recipe.deleted_at)
+        for recipe in recipes[:limit]
+        if recipe.deleted_at is not None
+    ]
+    return items, has_more
+
+
 def filter_tags_for_recipe_list(search_text: str, tag_slugs: list[str]) -> list[Tag]:
     """Tags on recipes matching list filters, with counts across the full result set."""
     filtered = filtered_active_recipe_queryset(search_text, tag_slugs)
@@ -560,30 +588,10 @@ class RecipeListView(PrivateRecipeMixin, ListView):
                     break
         context["list_made_by_display"] = list_made_by_display
         context["recently_made_items"] = recently_made_recipes_for_user(self.request.user)
+        recently_deleted_items, has_more_recently_deleted = recently_deleted_recipes_for_home()
+        context["recently_deleted_items"] = recently_deleted_items
+        context["has_more_recently_deleted"] = has_more_recently_deleted
         attach_last_made_display(context["recipes"])
-        deleted_recipes = annotate_recipe_last_made(
-            current_recipes()
-            .filter(deleted_at__isnull=False)
-            .select_related("owner")
-            .prefetch_related("photos", "tags")
-            .annotate(average_rating=Avg("ratings__value"))
-            .annotate(rating_count=Count("ratings")),
-        )
-        if query:
-            deleted_recipes = deleted_recipes.filter(
-                Q(title__icontains=query)
-                | Q(description__icontains=query)
-                | Q(ingredients__name__icontains=query)
-            )
-        for slug in tag_slugs:
-            deleted_recipes = deleted_recipes.filter(tags__slug=slug)
-        if made_by_user_id:
-            deleted_recipes = deleted_recipes.filter(made_records__user_id=made_by_user_id)
-        if query or tag_slugs or made_by_user_id:
-            deleted_recipes = deleted_recipes.distinct()
-        deleted_list = list(deleted_recipes.order_by("-deleted_at", *_recipe_title_order()))
-        attach_last_made_display(deleted_list)
-        context["deleted_recipes"] = deleted_list
         return context
 
     def render_to_response(self, context, **response_kwargs):

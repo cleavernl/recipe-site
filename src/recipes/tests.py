@@ -25,9 +25,11 @@ from recipes.models import (
     sync_recipe_tags,
 )
 from recipes.views import (
+    RECENTLY_DELETED_HOME_LIMIT,
     RECENTLY_MADE_HOME_LIMIT,
     RecipeListView,
     purge_expired_deleted_recipes,
+    recently_deleted_recipes_for_home,
     recently_made_recipes_for_user,
 )
 
@@ -1226,11 +1228,82 @@ class RecipeWorkflowTests(TestCase):
         self.assertRedirects(restore_response, self.recipe.get_absolute_url())
         self.assertIsNone(self.recipe.deleted_at)
 
-    def test_recipe_list_uses_same_tiles_for_active_and_recently_deleted_recipes(self):
+    def test_recipe_list_shows_recently_deleted_above_search(self):
+        older = Recipe.objects.create(
+            owner=self.owner,
+            title="Older Deleted Dish",
+            description="Deleted first.",
+            deleted_at=timezone.now() - timedelta(hours=2),
+        )
+        newer = Recipe.objects.create(
+            owner=self.owner,
+            title="Newer Deleted Dish",
+            description="Deleted second.",
+            deleted_at=timezone.now() - timedelta(hours=1),
+        )
+        newest = Recipe.objects.create(
+            owner=self.owner,
+            title="Newest Deleted Dish",
+            description="Deleted third.",
+            deleted_at=timezone.now(),
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, "Recently deleted")
+        self.assertContains(response, "recently-deleted-card")
+        self.assertContains(response, "Deleted ")
+        body = response.content.decode()
+        search_index = body.index("data-recipe-search-panel")
+        section = body[:search_index].split("Recently deleted", 1)[1]
+        self.assertNotIn("meta-list", section)
+        self.assertNotIn("Rating", section)
+        self.assertLess(body.index("Newest Deleted Dish"), search_index)
+        self.assertLess(body.index("Newer Deleted Dish"), search_index)
+        self.assertLess(body.index("Older Deleted Dish"), search_index)
+        self.assertLess(body.index("Newer Deleted Dish"), body.index("Older Deleted Dish"))
+        self.assertLess(body.index("Newest Deleted Dish"), body.index("Newer Deleted Dish"))
+        self.assertNotIn("See more", section)
+
+    def test_recipe_list_hides_recently_deleted_when_none_exist(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertNotContains(response, "Recently deleted")
+
+    def test_recently_deleted_limits_to_three_recipes_and_shows_see_more(self):
+        base = timezone.now()
+        for index in range(4):
+            Recipe.objects.create(
+                owner=self.owner,
+                title=f"Deleted Limit {index}",
+                description="",
+                deleted_at=base + timedelta(hours=index),
+            )
+        self.client.force_login(self.other_user)
+
+        recent, has_more = recently_deleted_recipes_for_home()
+
+        self.assertEqual(len(recent), RECENTLY_DELETED_HOME_LIMIT)
+        self.assertTrue(has_more)
+        self.assertEqual(recent[0].recipe.title, "Deleted Limit 3")
+        response = self.client.get(reverse("recipes:list"))
+        body = response.content.decode()
+        section = body.split("recently-deleted-inline", 1)[1].split("data-recipe-search-panel", 1)[0]
+        self.assertIn("Deleted Limit 3", section)
+        self.assertIn("Deleted Limit 2", section)
+        self.assertIn("Deleted Limit 1", section)
+        self.assertNotIn("Deleted Limit 0", section)
+        self.assertIn("See more", section)
+        self.assertContains(response, reverse("recipes:recently_deleted"))
+
+    def test_recipe_list_uses_compact_tiles_for_recently_deleted_recipes(self):
         deleted_recipe = Recipe.objects.create(
             owner=self.owner,
             title="Recently Deleted Soup",
-            description="A deleted recipe with the normal tile layout.",
+            description="A deleted recipe with the compact tile layout.",
             deleted_at=timezone.now(),
         )
         active_recipe = Recipe.objects.create(
@@ -1242,10 +1315,11 @@ class RecipeWorkflowTests(TestCase):
 
         response = self.client.get(reverse("recipes:list"))
 
-        self.assertContains(response, '<article class="recipe-card">', count=3)
+        self.assertContains(response, '<article class="recipe-card">', count=2)
+        self.assertContains(response, '<article class="recently-deleted-card">', count=1)
         self.assertContains(response, active_recipe.title)
         self.assertContains(response, deleted_recipe.title)
-        self.assertNotContains(response, "deleted-card")
+        self.assertNotContains(response, 'class="deleted-card"')
         self.assertNotContains(response, "restore-card-form")
 
     def test_recently_deleted_page_uses_recipe_cards(self):
@@ -1272,6 +1346,8 @@ class RecipeWorkflowTests(TestCase):
         response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
 
         self.assertContains(response, "Finished")
+        self.assertContains(response, "hero-photo-frame")
+        self.assertNotContains(response, "/media/thumb/")
 
     def test_expired_deleted_recipe_is_purged(self):
         self.recipe.deleted_at = timezone.now() - timedelta(days=8)

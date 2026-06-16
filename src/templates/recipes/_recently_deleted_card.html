@@ -1,0 +1,29 @@
+{% load recipe_format %}
+<article class="recently-deleted-card">
+  <div class="recently-deleted-card-media-wrap">
+    {% if item.recipe.photos.all %}
+      <div class="recently-deleted-card-media">
+        <img
+          src="{{ item.recipe.photos.first.image|tile_image_url:320 }}"
+          alt="{{ item.recipe.photos.first.caption }}"
+          loading="lazy"
+          decoding="async"
+        >
+      </div>
+    {% elif item.recipe.photo %}
+      <div class="recently-deleted-card-media">
+        <img src="{{ item.recipe.photo|tile_image_url:320 }}" alt="" loading="lazy" decoding="async">
+      </div>
+    {% else %}
+      <div class="recently-deleted-card-media recently-deleted-card-media-empty"><span>No photo</span></div>
+    {% endif %}
+  </div>
+  <a class="recently-deleted-card-link" href="{{ item.recipe.get_absolute_url }}" aria-label="View {{ item.recipe.title }}">
+    <div class="recently-deleted-card-body">
+      <h3>{{ item.recipe.title }}</h3>
+      <p class="recently-deleted-card-date">
+        <time datetime="{{ item.deleted_at|date:'c' }}">Deleted {{ item.deleted_at|date:"M j" }}</time>
+      </p>
+    </div>
+  </a>
+</article>

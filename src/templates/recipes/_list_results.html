@@ -26,18 +26,3 @@
     aria-hidden="true"
   ></div>
 {% endif %}
-
-{% if deleted_recipes %}
-  <section class="recently-deleted-inline">
-    <div class="section-divider">
-      <span></span>
-      <h2>Recently deleted</h2>
-      <span></span>
-    </div>
-    <section class="recipe-grid">
-      {% for recipe in deleted_recipes %}
-        {% include "recipes/_recipe_card.html" %}
-      {% endfor %}
-    </section>
-  </section>
-{% endif %}

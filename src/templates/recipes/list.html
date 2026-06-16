@@ -26,6 +26,26 @@
     </section>
   {% endif %}
 
+  {% if recently_deleted_items %}
+    <section class="recently-deleted-inline">
+      <div class="section-divider">
+        <span></span>
+        <h2>Recently deleted</h2>
+        <span></span>
+      </div>
+      <section class="recently-deleted-grid">
+        {% for item in recently_deleted_items %}
+          {% include "recipes/_recently_deleted_card.html" %}
+        {% endfor %}
+      </section>
+      {% if has_more_recently_deleted %}
+        <p class="section-see-more">
+          <a class="button secondary" href="{% url 'recipes:recently_deleted' %}">See more</a>
+        </p>
+      {% endif %}
+    </section>
+  {% endif %}
+
   <section class="recipe-list-tools" aria-labelledby="recipe-search-heading">
     <h2 id="recipe-search-heading" class="recipe-search-heading">Search recipes</h2>
     <div class="search-panel" data-recipe-search-panel>
