@@ -1611,6 +1611,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  const initImageLoadFrames = (root = document) => {
+    root.querySelectorAll("[data-image-load-frame]").forEach((frame) => {
+      if (!(frame instanceof HTMLElement)) {
+        return;
+      }
+      const img = frame.querySelector("img");
+      if (!(img instanceof HTMLImageElement)) {
+        return;
+      }
+
+      const markLoaded = () => {
+        frame.classList.add("is-loaded");
+      };
+
+      if (img.complete) {
+        markLoaded();
+        return;
+      }
+
+      img.addEventListener("load", markLoaded, { once: true });
+      img.addEventListener("error", markLoaded, { once: true });
+    });
+  };
+
   const loadCarouselSlideImage = (slide) => {
     const image = slide.querySelector("img");
     if (!image || image.getAttribute("src")) {
@@ -1622,6 +1646,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     image.setAttribute("src", dataSrc);
     image.removeAttribute("data-src");
+    if (slide instanceof HTMLElement) {
+      initImageLoadFrames(slide);
+    }
   };
 
   const initRecipeCarousels = (root) => {
@@ -2648,6 +2675,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         initRecipeCarousels(liveSearchDynamic);
         initTagOverflow(liveSearchDynamic);
+        initImageLoadFrames(liveSearchDynamic);
         return Boolean(sentinel);
       };
 
@@ -2750,6 +2778,7 @@ document.addEventListener("DOMContentLoaded", () => {
           syncListFiltersFromPartialHtml(html);
           initRecipeCarousels(liveSearchDynamic);
           initTagOverflow(liveSearchDynamic);
+          initImageLoadFrames(liveSearchDynamic);
           observeRecipeListSentinel();
 
           const nextUrl = new URL(window.location.href);
@@ -3405,30 +3434,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initRecipeEditSimilarTagModal();
   initRecipeQuickTagSimilarConfirm();
-
-  const initImageLoadFrames = (root = document) => {
-    root.querySelectorAll("[data-image-load-frame]").forEach((frame) => {
-      if (!(frame instanceof HTMLElement)) {
-        return;
-      }
-      const img = frame.querySelector("img");
-      if (!(img instanceof HTMLImageElement)) {
-        return;
-      }
-
-      const markLoaded = () => {
-        frame.classList.add("is-loaded");
-      };
-
-      if (img.complete) {
-        markLoaded();
-        return;
-      }
-
-      img.addEventListener("load", markLoaded, { once: true });
-      img.addEventListener("error", markLoaded, { once: true });
-    });
-  };
 
   initImageLoadFrames(document);
 

@@ -11,7 +11,13 @@ from django.urls import reverse
 from PIL import Image
 
 from recipes.models import Recipe, RecipePhoto
-from recipes.thumbnails import TILE_IMAGE_MAX_WIDTH, ensure_thumbnail, thumbnail_url
+from recipes.thumbnails import (
+    TILE_IMAGE_LIST_WIDTH,
+    TILE_IMAGE_MAX_WIDTH,
+    ensure_thumbnail,
+    thumbnail_url,
+    warm_tile_thumbnails,
+)
 
 
 def make_test_jpeg(*, width: int = 1600, height: int = 1200) -> bytes:
@@ -70,6 +76,13 @@ class RecipeThumbnailTests(TestCase):
         with Image.open(io.BytesIO(payload)) as served:
             self.assertLessEqual(served.width, TILE_IMAGE_MAX_WIDTH)
 
+    def test_warm_tile_thumbnails_creates_both_sizes(self):
+        warmed = warm_tile_thumbnails(self.recipe.photo.name)
+
+        self.assertEqual(warmed, 2)
+        self.assertIsNotNone(ensure_thumbnail(self.recipe.photo.name, TILE_IMAGE_LIST_WIDTH))
+        self.assertIsNotNone(ensure_thumbnail(self.recipe.photo.name, TILE_IMAGE_MAX_WIDTH))
+
     def test_recipe_list_uses_thumbnail_urls(self):
         self.client.force_login(self.user)
 
@@ -77,7 +90,7 @@ class RecipeThumbnailTests(TestCase):
 
         self.assertContains(
             response,
-            f'/media/thumb/{TILE_IMAGE_MAX_WIDTH}/{self.recipe.photo.name}"',
+            f'/media/thumb/{TILE_IMAGE_LIST_WIDTH}/{self.recipe.photo.name}"',
         )
         self.assertNotContains(response, f'src="/media/{self.recipe.photo.name}"')
 
@@ -96,6 +109,10 @@ class RecipeThumbnailTests(TestCase):
         response = self.client.get(reverse("recipes:list"))
 
         self.assertEqual(response.content.count(b"data-carousel-slide"), 1)
+        self.assertContains(
+            response,
+            f'/media/thumb/{TILE_IMAGE_LIST_WIDTH}/recipes/photos/gallery-only.jpg"',
+        )
         self.assertNotContains(
             response,
             f'/media/thumb/{TILE_IMAGE_MAX_WIDTH}/{self.recipe.photo.name}"',

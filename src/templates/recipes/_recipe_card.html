@@ -6,12 +6,11 @@
         <div class="recipe-carousel-track">
           {% for photo in recipe.photos.all %}
             <figure class="recipe-carousel-slide{% if forloop.first %} is-active{% endif %}" data-carousel-slide>
-              <img
-                {% if forloop.first %}src{% else %}data-src{% endif %}="{{ photo.image|tile_image_url }}"
-                alt="{{ photo.caption }}"
-                loading="lazy"
-                decoding="async"
-              >
+              {% if forloop.first %}
+                {% include "recipes/_recipe_image.html" with src=photo.image|tile_image_url:320 alt=photo.caption frame_class="recipe-card-media-frame" lazy=True %}
+              {% else %}
+                {% include "recipes/_recipe_image.html" with src=photo.image|tile_image_url:320 alt=photo.caption frame_class="recipe-card-media-frame" lazy=True defer_src=True %}
+              {% endif %}
             </figure>
           {% endfor %}
         </div>
@@ -24,7 +23,7 @@
       </section>
     {% elif recipe.photo %}
       <section class="recipe-card-media">
-        <img src="{{ recipe.photo|tile_image_url }}" alt="" loading="lazy" decoding="async">
+        {% include "recipes/_recipe_image.html" with src=recipe.photo|tile_image_url:320 alt="" frame_class="recipe-card-media-frame" lazy=True %}
       </section>
     {% else %}
       <div class="recipe-card-media recipe-card-media-empty"><span>No photo yet</span></div>

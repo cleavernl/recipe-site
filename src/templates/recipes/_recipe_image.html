@@ -2,7 +2,7 @@
   <div class="image-load-skeleton" aria-hidden="true"></div>
   <img
     {% if img_class %}class="{{ img_class }}"{% endif %}
-    src="{{ src }}"
+    {% if defer_src %}data-src{% else %}src{% endif %}="{{ src }}"
     alt="{{ alt|default:'' }}"
     {% if lazy %}loading="lazy" decoding="async"{% endif %}
   >

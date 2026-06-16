@@ -1567,6 +1567,11 @@ form p {
   place-items: center;
 }
 
+.recipe-card-media .recipe-card-media-frame {
+  height: 100%;
+  width: 100%;
+}
+
 .recipe-card-media span {
   color: var(--muted);
   font-weight: 700;

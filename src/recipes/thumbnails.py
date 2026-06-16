@@ -4,10 +4,11 @@ import hashlib
 from pathlib import Path
 
 from django.conf import settings
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 TILE_IMAGE_MAX_WIDTH = 520
-ALLOWED_THUMBNAIL_WIDTHS = frozenset({320, TILE_IMAGE_MAX_WIDTH})
+TILE_IMAGE_LIST_WIDTH = 320
+ALLOWED_THUMBNAIL_WIDTHS = frozenset({TILE_IMAGE_LIST_WIDTH, TILE_IMAGE_MAX_WIDTH})
 
 
 def thumbnail_url(relative_path: str, *, max_width: int = TILE_IMAGE_MAX_WIDTH) -> str:
@@ -67,12 +68,26 @@ def ensure_thumbnail(relative_path: str, max_width: int) -> Path | None:
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with Image.open(source_path) as opened:
-        image = _prepare_image(opened)
-        if image.width > max_width:
-            resized = image.copy()
-            resized.thumbnail((max_width, max_width * 3), Image.Resampling.LANCZOS)
-            image = resized
-        image.save(cache_path, format="JPEG", quality=82, optimize=True)
+    try:
+        with Image.open(source_path) as opened:
+            image = _prepare_image(opened)
+            if image.width > max_width:
+                resized = image.copy()
+                resized.thumbnail((max_width, max_width * 3), Image.Resampling.LANCZOS)
+                image = resized
+            image.save(cache_path, format="JPEG", quality=82, optimize=True)
+    except (OSError, UnidentifiedImageError):
+        return None
 
     return cache_path
+
+
+def warm_tile_thumbnails(relative_path: str) -> int:
+    """Pre-generate cached thumbnails for all allowed tile widths."""
+    if not relative_path:
+        return 0
+    warmed = 0
+    for max_width in ALLOWED_THUMBNAIL_WIDTHS:
+        if ensure_thumbnail(relative_path, max_width) is not None:
+            warmed += 1
+    return warmed
