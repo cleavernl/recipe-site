@@ -154,6 +154,7 @@ def import_recipe_from_document(
 
     recipe = Recipe.objects.create(
         owner=owner,
+        last_edited_by=owner,
         title=title,
         description=document["description"],
         prep_time_minutes=document["prep_time_minutes"],

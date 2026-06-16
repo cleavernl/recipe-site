@@ -8,6 +8,7 @@ from recipes.models import (
     InstructionStep,
     Rating,
     Recipe,
+    RecipeLineage,
     RecipeMade,
     RecipePhoto,
     Tag,
@@ -29,12 +30,17 @@ class RecipePhotoInline(admin.TabularInline):
     extra = 1
 
 
+@admin.register(RecipeLineage)
+class RecipeLineageAdmin(admin.ModelAdmin):
+    list_display = ("slug", "created_at")
+    search_fields = ("slug",)
+
+
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
-    list_display = ("title", "owner", "servings", "deleted_at", "created_at", "updated_at")
+    list_display = ("title", "lineage", "version_number", "owner", "last_edited_by", "servings", "deleted_at", "created_at")
     list_filter = ("deleted_at", "created_at", "updated_at")
-    search_fields = ("title", "description", "ingredients__name")
-    prepopulated_fields = {"slug": ("title",)}
+    search_fields = ("title", "description", "ingredients__name", "lineage__slug")
     filter_horizontal = ("tags",)
     inlines = [IngredientInline, InstructionStepInline, RecipePhotoInline]
 

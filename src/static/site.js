@@ -1220,14 +1220,22 @@ document.addEventListener("DOMContentLoaded", () => {
       return JSON.stringify(entries);
     };
 
-    const initialState = serializeForm();
-    const hasUnsavedChanges = () => serializeForm() !== initialState;
+    let initialState = "";
+    const captureBaseline = () => {
+      initialState = serializeForm();
+    };
+    const hasUnsavedChanges = () => initialState !== "" && serializeForm() !== initialState;
+
+    form.resetUnsavedBaseline = captureBaseline;
+    form.markUnsavedSubmitting = () => {
+      isSubmitting = true;
+    };
 
     form.addEventListener("submit", () => {
       isSubmitting = true;
     });
 
-    document.querySelectorAll("[data-discard-changes]").forEach((link) => {
+    form.querySelectorAll("[data-discard-changes]").forEach((link) => {
       link.addEventListener("click", () => {
         isDiscarding = true;
       });
@@ -1237,10 +1245,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isSubmitting || isDiscarding || !hasUnsavedChanges()) {
         return;
       }
+      if (form.hasAttribute("data-save-confirm-pending") && !isDiscarding) {
+        return;
+      }
 
       event.preventDefault();
       event.returnValue = "";
     });
+
+    captureBaseline();
   });
 
   const commentsList = document.querySelector("[data-comments-list]");
@@ -3186,19 +3199,24 @@ document.addEventListener("DOMContentLoaded", () => {
       (empty?.parentElement || breakdown).append(breakdownList);
     }
     if (breakdownList) {
-      const selector = `[data-rating-user-id="${payload.user_id}"]`;
+      const selector = payload.rating_id
+        ? `[data-rating-id="${payload.rating_id}"]`
+        : `[data-rating-user-id="${payload.user_id}"][data-rating-version="${payload.version_number}"]`;
       const item = breakdownList.querySelector(selector);
       if (payload.rating == null) {
         item?.remove();
         if (breakdownList.children.length === 0) {
           breakdownList.remove();
-          if (breakdown && !empty) {
+          if (breakdown && !breakdown.querySelector("[data-rating-empty]")) {
             const emptyMessage = document.createElement("p");
             emptyMessage.dataset.ratingEmpty = "";
             emptyMessage.textContent = "No one has rated this recipe yet.";
             breakdown.append(emptyMessage);
-          } else if (empty instanceof HTMLElement) {
-            empty.hidden = false;
+          } else {
+            const emptyEl = breakdown.querySelector("[data-rating-empty]");
+            if (emptyEl instanceof HTMLElement) {
+              emptyEl.hidden = false;
+            }
           }
         }
         return;
@@ -3206,9 +3224,16 @@ document.addEventListener("DOMContentLoaded", () => {
       let row = item;
       if (!row) {
         row = document.createElement("li");
+        if (payload.rating_id) {
+          row.dataset.ratingId = String(payload.rating_id);
+        }
         row.dataset.ratingUserId = String(payload.user_id);
+        row.dataset.ratingVersion = String(payload.version_number);
         row.innerHTML = `
-          <span data-rating-reviewer-name></span>
+          <div class="reviewer-meta">
+            <span data-rating-reviewer-name></span>
+            <span class="comment-version">Version ${payload.version_number}</span>
+          </div>
           <strong class="star-meter reviewer-stars">
             <span class="star-meter-empty" aria-hidden="true">★★★★★</span>
             <span class="star-meter-fill" aria-hidden="true">★★★★★</span>
@@ -3295,6 +3320,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return { activate, deactivate, armVisible };
   };
 
+  const submitRecipeEditForm = (form) => {
+    if (typeof form.markUnsavedSubmitting === "function") {
+      form.markUnsavedSubmitting();
+    }
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+      return;
+    }
+    HTMLFormElement.prototype.submit.call(form);
+  };
+
   const initRecipeEditSimilarTagModal = () => {
     const overlay = document.getElementById("recipe-similar-tag-modal");
     const dataEl = document.getElementById("recipe-similar-tag-pairs-json");
@@ -3340,15 +3376,17 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
       ackInput.value = "accepted";
+      form.removeAttribute("data-save-confirm-pending");
       overlayControl.deactivate();
       finish();
-      HTMLFormElement.prototype.submit.call(form);
+      submitRecipeEditForm(form);
     };
     const onNo = () => {
       ackInput.value = "skipped";
+      form.removeAttribute("data-save-confirm-pending");
       overlayControl.deactivate();
       finish();
-      HTMLFormElement.prototype.submit.call(form);
+      submitRecipeEditForm(form);
     };
     overlayControl = createSimilarTagOverlayController(overlay, panel, onNo);
     yes?.addEventListener("click", onYes);
@@ -3433,6 +3471,75 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   initRecipeEditSimilarTagModal();
+
+  const initRecipeEditVersionSaveModal = () => {
+    const overlay = document.getElementById("recipe-version-save-modal");
+    const form = document.querySelector("form[data-unsaved-warning]");
+    const modeInput = form?.querySelector("input[name='version_save_mode']");
+    const panel = overlay?.querySelector('[role="alertdialog"]');
+    if (
+      !(overlay instanceof HTMLElement) ||
+      !(panel instanceof HTMLElement) ||
+      !(form instanceof HTMLFormElement) ||
+      !(modeInput instanceof HTMLInputElement)
+    ) {
+      return;
+    }
+    const updateBtn = panel.querySelector("[data-version-save-update]");
+    const newBtn = panel.querySelector("[data-version-save-new]");
+    const finish = () => {
+      updateBtn?.removeEventListener("click", onUpdate);
+      newBtn?.removeEventListener("click", onNew);
+    };
+    let overlayControl = { deactivate() {}, armVisible() {} };
+    const submitWithMode = (mode) => {
+      modeInput.value = mode;
+      form.removeAttribute("data-save-confirm-pending");
+      overlayControl.deactivate();
+      finish();
+      submitRecipeEditForm(form);
+    };
+    const onUpdate = () => submitWithMode("update");
+    const onNew = () => submitWithMode("new_version");
+    overlayControl = createSimilarTagOverlayController(overlay, panel, onUpdate);
+    updateBtn?.addEventListener("click", onUpdate);
+    newBtn?.addEventListener("click", onNew);
+    overlayControl.armVisible();
+  };
+
+  initRecipeEditVersionSaveModal();
+
+  const initRecipeEditVersionSaveRequiredModal = () => {
+    const overlay = document.getElementById("recipe-version-save-required-modal");
+    const form = document.querySelector("form[data-unsaved-warning]");
+    const modeInput = form?.querySelector("input[name='version_save_mode']");
+    const panel = overlay?.querySelector('[role="alertdialog"]');
+    if (
+      !(overlay instanceof HTMLElement) ||
+      !(panel instanceof HTMLElement) ||
+      !(form instanceof HTMLFormElement) ||
+      !(modeInput instanceof HTMLInputElement)
+    ) {
+      return;
+    }
+    const newBtn = panel.querySelector("[data-version-save-new]");
+    const finish = () => {
+      newBtn?.removeEventListener("click", onNew);
+    };
+    let overlayControl = { deactivate() {}, armVisible() {} };
+    const onNew = () => {
+      modeInput.value = "new_version";
+      form.removeAttribute("data-save-confirm-pending");
+      overlayControl.deactivate();
+      finish();
+      submitRecipeEditForm(form);
+    };
+    overlayControl = createSimilarTagOverlayController(overlay, panel, onNew);
+    newBtn?.addEventListener("click", onNew);
+    overlayControl.armVisible();
+  };
+
+  initRecipeEditVersionSaveRequiredModal();
   initRecipeQuickTagSimilarConfirm();
 
   initImageLoadFrames(document);

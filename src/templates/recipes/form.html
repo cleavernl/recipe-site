@@ -49,10 +49,16 @@
         </form>
       </section>
     {% endif %}
-    <form id="recipe-edit-form" method="post" enctype="multipart/form-data" data-unsaved-warning>
+    <form id="recipe-edit-form" method="post" enctype="multipart/form-data" data-unsaved-warning{% if show_version_save_modal or show_version_save_required_modal or show_similar_tag_modal %} data-save-confirm-pending{% endif %}>
       {% csrf_token %}
       {{ recipe_form.similar_tags_ack }}
+      {{ recipe_form.version_save_mode }}
       {{ recipe_form.non_field_errors }}
+      {% if require_new_version_on_save %}
+        <p class="recipe-edit-version-notice">
+          Someone else saved the latest changes to this version. Saving here will create a new version.
+        </p>
+      {% endif %}
       <p>
         {{ recipe_form.title.label_tag }}
         {{ recipe_form.title }}
@@ -302,6 +308,60 @@
             <div class="similar-tag-modal-actions">
               <button type="button" class="button" data-similar-tag-yes>Use suggested tags</button>
               <button type="button" class="button secondary" data-similar-tag-no>Keep what I typed</button>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if show_version_save_modal and recipe.pk %}
+        <div
+          id="recipe-version-save-modal"
+          class="similar-tag-overlay"
+          data-version-save-overlay
+          role="presentation"
+        >
+          <div class="similar-tag-overlay-backdrop" aria-hidden="true"></div>
+          <div
+            class="similar-tag-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="recipe-version-save-modal-title"
+            tabindex="-1"
+          >
+            <h2 id="recipe-version-save-modal-title">Save your changes</h2>
+            <p class="similar-tag-modal-lede">
+              Update version {{ recipe.version_number }} in place, or save your edits as a new version?
+            </p>
+            <div class="similar-tag-modal-actions">
+              <button type="button" class="button" data-version-save-update>Update this version</button>
+              <button type="button" class="button secondary" data-version-save-new>Save as new version</button>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if show_version_save_required_modal and recipe.pk %}
+        <div
+          id="recipe-version-save-required-modal"
+          class="similar-tag-overlay"
+          data-version-save-required-overlay
+          role="presentation"
+        >
+          <div class="similar-tag-overlay-backdrop" aria-hidden="true"></div>
+          <div
+            class="similar-tag-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="recipe-version-save-required-modal-title"
+            tabindex="-1"
+          >
+            <h2 id="recipe-version-save-required-modal-title">Save as a new version</h2>
+            <p class="similar-tag-modal-lede">
+              You did not save the latest changes to version {{ recipe.version_number }}.
+              Your edits must be saved as a new version.
+            </p>
+            <div class="similar-tag-modal-actions">
+              <button type="button" class="button" data-version-save-new>Save as new version</button>
             </div>
           </div>
         </div>

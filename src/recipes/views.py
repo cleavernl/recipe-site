@@ -11,7 +11,6 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import (
     Avg,
@@ -48,8 +47,20 @@ from recipes.forms import (
     expand_inline_formset_for_import_initial,
     similar_tag_pairs_for_names,
 )
-from recipes.models import Rating, Recipe, RecipeMade, Tag, sync_recipe_tags
+from recipes.models import Comment, Rating, Recipe, RecipeLineage, RecipeMade, Tag, sync_recipe_tags
 from recipes.photo_sync import sync_legacy_recipe_photo_to_gallery
+from recipes.versioning import (
+    copy_gallery_photo_for_new_version,
+    create_recipe_version_from_form,
+    get_recipe_for_slug,
+    lineage_version_choices,
+    next_version_number,
+    parse_recipe_version_number,
+    restrict_to_latest_versions,
+    save_ingredient_formset_on_new_version,
+    save_step_formset_on_new_version,
+    version_navigation_context,
+)
 from recipes.url_import import (
     RECIPE_URL_IMPORT_SESSION_KEY,
     attach_staged_photo_to_recipe,
@@ -67,7 +78,9 @@ class PrivateRecipeMixin(LoginRequiredMixin):
 
 def purge_expired_deleted_recipes() -> int:
     cutoff = timezone.now() - timedelta(days=7)
-    deleted_count, _ = Recipe.objects.filter(deleted_at__lte=cutoff).delete()
+    expired = Recipe.objects.filter(deleted_at__lte=cutoff)
+    deleted_count, _ = expired.delete()
+    RecipeLineage.objects.filter(versions__isnull=True).delete()
     return deleted_count
 
 
@@ -108,23 +121,42 @@ def rating_form_post_data(post) -> dict:
     return data
 
 
-def rating_payload(recipe: Recipe, user) -> dict:
+def rating_payload(recipe: Recipe, user, *, rating: Rating | None = None) -> dict:
     aggregate = recipe.ratings.aggregate(average=Avg("value"), count=Count("id"))
     average = aggregate["average"]
     count = aggregate["count"] or 0
     user_name = display_user_name(user)
-    return {
+    payload = {
         "average": round(average, 1) if average is not None else None,
         "average_percent": round((average or 0) / 5 * 100, 2),
         "count": count,
         "reviewer_label": f"{user_name} (you)",
         "user_id": user.id,
         "user_name": user_name,
+        "version_number": recipe.version_number,
     }
+    if rating is not None:
+        payload["rating_id"] = rating.id
+    return payload
 
 
 def user_can_edit_recipe(user, recipe: Recipe) -> bool:
-    return user.is_staff or recipe.owner_id == user.id
+    """Any signed-in member may edit recipe content."""
+    return user.is_authenticated
+
+
+def user_can_update_recipe_version_in_place(user, recipe: Recipe) -> bool:
+    """Only the member who last saved this version may overwrite it."""
+    if not user.is_authenticated or not recipe.pk:
+        return False
+    last_editor_id = recipe.last_edited_by_id or recipe.owner_id
+    return last_editor_id == user.id
+
+
+def user_must_save_new_recipe_version(user, recipe: Recipe) -> bool:
+    if not recipe.pk:
+        return False
+    return not user_can_update_recipe_version_in_place(user, recipe)
 
 
 def tag_line_formset_initial(recipe: Recipe) -> list[dict[str, str]]:
@@ -302,11 +334,13 @@ def filtered_active_recipe_queryset(
 ):
     """Active recipes optionally filtered by search text, tags (AND), and/or maker."""
     queryset = annotate_recipe_last_made(
-        active_recipes()
-        .select_related("owner")
-        .prefetch_related("ingredients", "photos", "tags")
-        .annotate(average_rating=Avg("ratings__value"))
-        .annotate(rating_count=Count("ratings")),
+        restrict_to_latest_versions(
+            active_recipes()
+            .select_related("owner", "lineage")
+            .prefetch_related("ingredients", "photos", "tags")
+            .annotate(average_rating=Avg("ratings__value"))
+            .annotate(rating_count=Count("ratings")),
+        ),
     )
     query = search_text.strip()
     if query:
@@ -406,10 +440,12 @@ def recently_deleted_recipes_for_home(
     """Soft-deleted recipes for the home preview, newest first."""
     purge_expired_deleted_recipes()
     recipes = list(
-        current_recipes()
-        .filter(deleted_at__isnull=False)
-        .select_related("owner")
-        .prefetch_related("photos")
+        restrict_to_latest_versions(
+            current_recipes()
+            .filter(deleted_at__isnull=False)
+            .select_related("owner", "lineage")
+            .prefetch_related("photos"),
+        )
         .order_by("-deleted_at", *_recipe_title_order())[: limit + 1],
     )
     has_more = len(recipes) > limit
@@ -529,7 +565,7 @@ class RandomRecipeView(PrivateRecipeMixin, View):
             query_string = urlencode(pairs)
             return redirect(f"{list_url}?{query_string}" if query_string else list_url)
         chosen_pk = random.choice(pk_list)
-        slug = recipe_qs.filter(pk=chosen_pk).values_list("slug", flat=True).first()
+        slug = recipe_qs.filter(pk=chosen_pk).values_list("lineage__slug", flat=True).first()
         if not slug:
             return redirect(reverse("recipes:list"))
         return redirect("recipes:detail", slug=slug)
@@ -621,17 +657,25 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
     def get_queryset(self):
         return (
             current_recipes()
-            .select_related("owner")
+            .select_related("owner", "lineage")
             .prefetch_related(
                 "ingredients",
                 "steps",
                 "photos",
-                "comments__author",
                 "ratings__user",
                 "tags",
             )
             .annotate(average_rating=Avg("ratings__value"))
             .annotate(rating_count=Count("ratings"))
+        )
+
+    def get_object(self, queryset=None):
+        queryset = queryset or self.get_queryset()
+        version_number = parse_recipe_version_number(self.request.GET.get("version"))
+        return get_recipe_for_slug(
+            self.kwargs["slug"],
+            version_number=version_number,
+            base_qs=queryset,
         )
 
     def get_context_data(self, **kwargs):
@@ -643,6 +687,11 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
         comment_ordering = (
             ("-created_at", "-id") if comment_sort == "newest" else ("created_at", "id")
         )
+        lineage_recipe_ids = list(
+            current_recipes()
+            .filter(lineage=recipe.lineage)
+            .values_list("pk", flat=True),
+        )
         context["can_edit"] = user_can_edit_recipe(self.request.user, recipe)
         context["comment_form"] = CommentForm()
         context["rating_form"] = RatingForm(
@@ -652,15 +701,19 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
         context["average_rating_percent"] = (
             round(average_rating / 5 * 100, 2) if average_rating is not None else 0
         )
-        context["ratings"] = [
+        context["lineage_ratings"] = [
             {
+                "id": rating.id,
                 "is_current_user": rating.user_id == self.request.user.id,
                 "user_id": rating.user_id,
                 "user_name": display_user_name(rating.user),
                 "value": rating.value,
                 "value_percent": rating.value * 20,
+                "version_number": rating.recipe.version_number,
             }
-            for rating in recipe.ratings.all().order_by("-updated_at", "-id")
+            for rating in Rating.objects.filter(recipe_id__in=lineage_recipe_ids)
+            .select_related("user", "recipe")
+            .order_by("-updated_at", "-id")
         ]
         context["comment_sort"] = comment_sort
         context["prompt_review"] = self.request.GET.get("review") == "1"
@@ -670,9 +723,20 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
                 "body": comment.body,
                 "created_at": comment.created_at,
                 "id": comment.id,
+                "version_number": comment.recipe.version_number,
             }
-            for comment in recipe.comments.all().order_by(*comment_ordering)
+            for comment in Comment.objects.filter(recipe_id__in=lineage_recipe_ids)
+            .select_related("author", "recipe")
+            .order_by(*comment_ordering)
         ]
+        context["recipe_versions"] = lineage_version_choices(
+            recipe,
+            base_qs=current_recipes().filter(lineage=recipe.lineage),
+        )
+        context.update(version_navigation_context(recipe, context["recipe_versions"]))
+        context["is_latest_version"] = any(
+            version["is_current"] and version["is_latest"] for version in context["recipe_versions"]
+        )
         context["photo_count"] = (
             recipe.photos.count() if recipe.photos.exists() else int(bool(recipe.photo))
         )
@@ -738,10 +802,17 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
                     "step_formset": step_formset,
                     "photo_formset": photo_formset,
                     "tag_formset": tag_formset,
-                    "recipe": self.get_recipe(),
                 }
             )
+        if "recipe" not in context:
+            context["recipe"] = self.get_recipe()
         context["tag_suggestions"] = tag_suggestions_queryset()
+        recipe = context["recipe"]
+        if recipe.pk:
+            context["require_new_version_on_save"] = user_must_save_new_recipe_version(
+                self.request.user,
+                recipe,
+            )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -766,6 +837,30 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
                         tag_formset=tag_formset,
                         show_similar_tag_modal=True,
                         similar_tag_modal_pairs=similar_tag_modal_pairs,
+                    )
+                )
+            recipe = self.get_recipe()
+            version_save_mode = (request.POST.get("version_save_mode") or "").strip()
+            if recipe.pk and version_save_mode not in {"update", "new_version"}:
+                if user_must_save_new_recipe_version(request.user, recipe):
+                    return self.render_to_response(
+                        self.get_context_data(
+                            recipe_form=recipe_form,
+                            ingredient_formset=ingredient_formset,
+                            step_formset=step_formset,
+                            photo_formset=photo_formset,
+                            tag_formset=tag_formset,
+                            show_version_save_required_modal=True,
+                        )
+                    )
+                return self.render_to_response(
+                    self.get_context_data(
+                        recipe_form=recipe_form,
+                        ingredient_formset=ingredient_formset,
+                        step_formset=step_formset,
+                        photo_formset=photo_formset,
+                        tag_formset=tag_formset,
+                        show_version_save_modal=True,
                     )
                 )
             return self.forms_valid(
@@ -794,8 +889,37 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
         photo_formset,
         tag_formset,
     ):
+        existing = self.get_recipe()
+        version_save_mode = (self.request.POST.get("version_save_mode") or "update").strip()
+        must_new_version = user_must_save_new_recipe_version(self.request.user, existing)
+        create_new_version = bool(
+            existing.pk and (must_new_version or version_save_mode == "new_version")
+        )
+
+        if create_new_version:
+            recipe = create_recipe_version_from_form(
+                existing,
+                recipe_form,
+                next_version_number(existing.lineage),
+                editor=self.request.user,
+            )
+            save_ingredient_formset_on_new_version(recipe, ingredient_formset)
+            save_step_formset_on_new_version(recipe, step_formset)
+            self.save_photo_formset(recipe, photo_formset, for_new_version=True)
+            sync_recipe_tags(recipe, ", ".join(tag_formset.ordered_tag_names()))
+            messages.success(self.request, f"Saved as version {recipe.version_number}.")
+            return redirect(recipe)
+
         recipe = recipe_form.save(commit=False)
-        recipe.owner = self.get_recipe().owner
+        if existing.pk:
+            recipe.pk = existing.pk
+            recipe.lineage = existing.lineage
+            recipe.version_number = existing.version_number
+            recipe.owner = existing.owner
+        else:
+            recipe.owner = self.request.user
+
+        recipe.last_edited_by = self.request.user
         recipe.save()
         ingredient_formset.instance = recipe
         step_formset.instance = recipe
@@ -813,14 +937,14 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
         raw = (self.request.POST.get(form.add_prefix("DELETE")) or "").strip().lower()
         return raw in {"on", "true", "1", "yes", "y"}
 
-    def save_photo_formset(self, recipe, photo_formset) -> None:
+    def save_photo_formset(self, recipe, photo_formset, *, for_new_version: bool = False) -> None:
         staged_paths: list[str] = []
         for form in photo_formset.forms:
             if not hasattr(form, "cleaned_data"):
                 continue
             staged = (self.request.POST.get(form.add_prefix("staged_path")) or "").strip()
             if self._photo_form_marked_delete(form):
-                if form.instance.pk:
+                if not for_new_version and form.instance.pk:
                     form.instance.delete()
                 if staged:
                     staged_paths.append(staged)
@@ -832,6 +956,7 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
             order_value = order if order is not None else 0
 
             if uploaded:
+                form.instance.pk = None
                 form.instance.recipe = recipe
                 form.save()
                 if staged:
@@ -846,6 +971,15 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
                     order=order_value,
                 )
                 staged_paths.append(staged)
+                continue
+
+            if for_new_version and form.instance.pk and form.instance.image:
+                copy_gallery_photo_for_new_version(
+                    recipe,
+                    source_photo=form.instance,
+                    caption=caption or form.instance.caption,
+                    order=order_value,
+                )
 
         cleanup_staged_photos(staged_paths)
 
@@ -937,9 +1071,12 @@ class RecipeUpdateView(RecipeFormMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        self.recipe = get_object_or_404(current_recipes(), slug=kwargs["slug"])
-        if not user_can_edit_recipe(request.user, self.recipe):
-            raise PermissionDenied
+        version_number = parse_recipe_version_number(request.GET.get("version"))
+        self.recipe = get_recipe_for_slug(
+            kwargs["slug"],
+            version_number=version_number,
+            base_qs=current_recipes(),
+        )
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -949,7 +1086,11 @@ class RecipeDeleteView(PrivateRecipeMixin, DeleteView):
     success_url = reverse_lazy("recipes:list")
 
     def get_queryset(self):
-        return active_recipes()
+        return active_recipes().select_related("lineage")
+
+    def get_object(self, queryset=None):
+        queryset = queryset or self.get_queryset()
+        return get_recipe_for_slug(self.kwargs["slug"], base_qs=queryset)
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -958,8 +1099,11 @@ class RecipeDeleteView(PrivateRecipeMixin, DeleteView):
 
     def form_valid(self, form):
         recipe = self.object
-        recipe.deleted_at = timezone.now()
-        recipe.save(update_fields=["deleted_at", "updated_at"])
+        now = timezone.now()
+        recipe.lineage.versions.filter(deleted_at__isnull=True).update(
+            deleted_at=now,
+            updated_at=now,
+        )
         messages.success(self.request, "Recipe moved to recently deleted.")
         return redirect(self.success_url)
 
@@ -972,12 +1116,14 @@ class RecentlyDeletedRecipeListView(PrivateRecipeMixin, ListView):
     def get_queryset(self):
         purge_expired_deleted_recipes()
         return (
-            current_recipes()
-            .filter(deleted_at__isnull=False)
-            .select_related("owner")
-            .prefetch_related("photos")
-            .annotate(average_rating=Avg("ratings__value"))
-            .annotate(rating_count=Count("ratings"))
+            restrict_to_latest_versions(
+                current_recipes()
+                .filter(deleted_at__isnull=False)
+                .select_related("owner", "lineage")
+                .prefetch_related("photos")
+                .annotate(average_rating=Avg("ratings__value"))
+                .annotate(rating_count=Count("ratings")),
+            )
             .order_by(
                 "-deleted_at",
                 "title",
@@ -988,9 +1134,14 @@ class RecentlyDeletedRecipeListView(PrivateRecipeMixin, ListView):
 @method_decorator(login_required, name="dispatch")
 class RestoreRecipeView(View):
     def post(self, request, slug):
-        recipe = get_object_or_404(current_recipes(), slug=slug, deleted_at__isnull=False)
-        recipe.deleted_at = None
-        recipe.save(update_fields=["deleted_at", "updated_at"])
+        recipe = get_recipe_for_slug(
+            slug,
+            base_qs=current_recipes().filter(deleted_at__isnull=False),
+        )
+        recipe.lineage.versions.exclude(deleted_at__isnull=True).update(
+            deleted_at=None,
+            updated_at=timezone.now(),
+        )
         messages.success(request, "Recipe restored.")
         return redirect(recipe)
 
@@ -1001,7 +1152,16 @@ class RecipePrintView(PrivateRecipeMixin, DetailView):
     context_object_name = "recipe"
 
     def get_queryset(self):
-        return current_recipes().select_related("owner").prefetch_related("ingredients", "steps")
+        return current_recipes().select_related("owner", "lineage").prefetch_related("ingredients", "steps")
+
+    def get_object(self, queryset=None):
+        queryset = queryset or self.get_queryset()
+        version_number = parse_recipe_version_number(self.request.GET.get("version"))
+        return get_recipe_for_slug(
+            self.kwargs["slug"],
+            version_number=version_number,
+            base_qs=queryset,
+        )
 
 
 class RecipeMakeMixin(PrivateRecipeMixin, DetailView):
@@ -1011,7 +1171,16 @@ class RecipeMakeMixin(PrivateRecipeMixin, DetailView):
     make_active_panel = "ingredients"
 
     def get_queryset(self):
-        return current_recipes().prefetch_related("ingredients", "steps")
+        return current_recipes().select_related("lineage").prefetch_related("ingredients", "steps")
+
+    def get_object(self, queryset=None):
+        queryset = queryset or self.get_queryset()
+        version_number = parse_recipe_version_number(self.request.GET.get("version"))
+        return get_recipe_for_slug(
+            self.kwargs["slug"],
+            version_number=version_number,
+            base_qs=queryset,
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1039,7 +1208,8 @@ class RecipeMakeStepsView(RecipeMakeMixin):
 @login_required
 @require_POST
 def record_recipe_made(request, slug):
-    recipe = get_object_or_404(current_recipes(), slug=slug)
+    version_number = parse_recipe_version_number(request.GET.get("version"))
+    recipe = get_recipe_for_slug(slug, version_number=version_number, base_qs=current_recipes())
     RecipeMade.objects.create(recipe=recipe, user=request.user)
     rating = Rating.objects.filter(recipe=recipe, user=request.user).first()
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -1059,9 +1229,7 @@ class AddRecipeTagView(View):
     """Append one tag to a recipe from the detail page (owner or staff)."""
 
     def post(self, request, slug):
-        recipe = get_object_or_404(active_recipes(), slug=slug)
-        if not user_can_edit_recipe(request.user, recipe):
-            raise PermissionDenied
+        recipe = get_recipe_for_slug(slug, base_qs=active_recipes())
         if request.headers.get("X-Recipe-Similar-Tag-Check") == "1":
             form = RecipeQuickAddTagForm(request.POST)
             if not form.is_valid():
@@ -1107,7 +1275,12 @@ class AddRecipeTagView(View):
 @method_decorator(login_required, name="dispatch")
 class AddCommentView(View):
     def post(self, request, slug):
-        recipe = get_object_or_404(current_recipes(), slug=slug)
+        version_number = parse_recipe_version_number(request.GET.get("version"))
+        recipe = get_recipe_for_slug(
+            slug,
+            version_number=version_number,
+            base_qs=current_recipes(),
+        )
         form = CommentForm(request.POST)
         if form.is_valid():
             comment = form.save(commit=False)
@@ -1123,7 +1296,12 @@ class AddCommentView(View):
 @login_required
 @require_POST
 def rate_recipe(request, slug):
-    recipe = get_object_or_404(current_recipes(), slug=slug)
+    version_number = parse_recipe_version_number(request.GET.get("version"))
+    recipe = get_recipe_for_slug(
+        slug,
+        version_number=version_number,
+        base_qs=current_recipes(),
+    )
     if request.POST.get("clear") == "1":
         deleted, _ = Rating.objects.filter(recipe=recipe, user=request.user).delete()
         message = "Rating removed." if deleted else "No rating to remove."
@@ -1153,7 +1331,7 @@ def rate_recipe(request, slug):
                     "ok": True,
                     "message": message,
                     "rating": rating.value,
-                    **rating_payload(recipe, request.user),
+                    **rating_payload(recipe, request.user, rating=rating),
                 }
             )
         messages.success(request, message)

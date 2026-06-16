@@ -56,6 +56,51 @@ def tag_formset_post_data(names: list[str]) -> dict[str, str]:
     return data
 
 
+def recipe_edit_save_post_ack(*, mode: str = "update") -> dict[str, str]:
+    """Hidden fields required when posting an existing recipe edit form."""
+    return {"version_save_mode": mode}
+
+
+def build_recipe_edit_post_data(
+    recipe: Recipe,
+    *,
+    title: str | None = None,
+    description: str | None = None,
+) -> dict[str, str]:
+    ingredient = recipe.ingredients.get()
+    step = recipe.steps.get()
+    return {
+        "title": title or recipe.title,
+        "description": description or recipe.description,
+        "prep_time_minutes": str(recipe.prep_time_minutes),
+        "cook_time_minutes": str(recipe.cook_time_minutes),
+        "servings": str(recipe.servings),
+        "source_url": "",
+        **tag_formset_post_data([""]),
+        **recipe_edit_save_post_ack(),
+        "ingredients-TOTAL_FORMS": "1",
+        "ingredients-INITIAL_FORMS": "1",
+        "ingredients-MIN_NUM_FORMS": "0",
+        "ingredients-MAX_NUM_FORMS": "1000",
+        "ingredients-0-id": str(ingredient.id),
+        "ingredients-0-quantity": ingredient.quantity,
+        "ingredients-0-name": ingredient.name,
+        "ingredients-0-notes": ingredient.notes,
+        "ingredients-0-order": "1",
+        "steps-TOTAL_FORMS": "1",
+        "steps-INITIAL_FORMS": "1",
+        "steps-MIN_NUM_FORMS": "0",
+        "steps-MAX_NUM_FORMS": "1000",
+        "steps-0-id": str(step.id),
+        "steps-0-text": step.text,
+        "steps-0-order": "1",
+        "photos-TOTAL_FORMS": "1",
+        "photos-INITIAL_FORMS": "0",
+        "photos-MIN_NUM_FORMS": "0",
+        "photos-MAX_NUM_FORMS": "1000",
+    }
+
+
 class RecipeWorkflowTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
@@ -627,11 +672,12 @@ class RecipeWorkflowTests(TestCase):
         message_text = " ".join(str(m) for m in response.context["messages"])
         self.assertIn("already", message_text.lower())
 
-    def test_quick_add_tag_requires_permission(self):
+    def test_any_user_can_quick_add_tag(self):
         self.client.force_login(self.other_user)
         url = reverse("recipes:add_tag", kwargs={"slug": self.recipe.slug})
-        response = self.client.post(url, {"tag": "Nope"})
-        self.assertEqual(response.status_code, 403)
+        response = self.client.post(url, {"tag": "weeknight"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.recipe.tags.filter(name="weeknight").exists())
 
     def test_quick_add_tag_empty_rejects(self):
         self.client.force_login(self.owner)
@@ -833,14 +879,15 @@ class RecipeWorkflowTests(TestCase):
         self.assertIn("still-here", slugs)
         self.assertNotIn("only-deleted", slugs)
 
-    def test_non_owner_cannot_edit_recipe(self):
+    def test_any_authenticated_user_can_open_edit(self):
         self.client.force_login(self.other_user)
 
         response = self.client.get(
             reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Sunday Pancakes")
 
     def test_legacy_recipe_photo_syncs_to_gallery_on_edit(self):
         self.recipe.photo.save(
@@ -905,6 +952,7 @@ class RecipeWorkflowTests(TestCase):
                 "servings": str(self.recipe.servings),
                 "source_url": "",
                 **tag_formset_post_data([""]),
+                **recipe_edit_save_post_ack(),
                 "ingredients-TOTAL_FORMS": "2",
                 "ingredients-INITIAL_FORMS": "1",
                 "ingredients-MIN_NUM_FORMS": "0",
@@ -949,6 +997,7 @@ class RecipeWorkflowTests(TestCase):
                 "servings": str(self.recipe.servings),
                 "source_url": "",
                 **tag_formset_post_data([""]),
+                **recipe_edit_save_post_ack(),
                 "ingredients-TOTAL_FORMS": "2",
                 "ingredients-INITIAL_FORMS": "1",
                 "ingredients-MIN_NUM_FORMS": "0",
@@ -1107,8 +1156,10 @@ class RecipeWorkflowTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        rating = Rating.objects.get(recipe=self.recipe, user=self.other_user)
         self.assertEqual(
-            response.json(),
+            payload,
             {
                 "ok": True,
                 "message": "Rating saved.",
@@ -1119,9 +1170,11 @@ class RecipeWorkflowTests(TestCase):
                 "reviewer_label": "Sam C. (you)",
                 "user_id": self.other_user.id,
                 "user_name": "Sam C.",
+                "version_number": 1,
+                "rating_id": rating.id,
             },
         )
-        self.assertEqual(Rating.objects.get(recipe=self.recipe, user=self.other_user).value, 4)
+        self.assertEqual(rating.value, 4)
 
     def test_ajax_rating_accepts_prefixed_value_field(self):
         self.client.force_login(self.other_user)
@@ -1155,6 +1208,7 @@ class RecipeWorkflowTests(TestCase):
         self.assertEqual(payload["message"], "Rating removed.")
         self.assertIsNone(payload["average"])
         self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["version_number"], 1)
 
     def test_ajax_clear_rating_when_none_exists_is_ok(self):
         self.client.force_login(self.other_user)
@@ -1498,6 +1552,268 @@ class RecipeWorkflowTests(TestCase):
 
         self.assertContains(response, "data-prompt-review")
         self.assertContains(response, "is-prompt-review-focus")
+
+
+class RecipeVersionTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner",
+            first_name="Pat",
+            last_name="Baker",
+            password="password-123",
+        )
+        self.other_user = User.objects.create_user(
+            username="cousin",
+            first_name="Sam",
+            last_name="Cook",
+            password="password-123",
+        )
+        self.recipe = Recipe.objects.create(
+            owner=self.owner,
+            title="Sunday Pancakes",
+            description="Fluffy pancakes for slow mornings.",
+            prep_time_minutes=10,
+            cook_time_minutes=15,
+            servings=4,
+        )
+        Ingredient.objects.create(recipe=self.recipe, quantity="2 cups", name="flour", order=1)
+        InstructionStep.objects.create(recipe=self.recipe, text="Mix and cook.", order=1)
+
+    def _edit_post_data(self, *, title: str | None = None, description: str | None = None) -> dict[str, str]:
+        return build_recipe_edit_post_data(
+            self.recipe,
+            title=title,
+            description=description,
+        )
+
+    def test_non_last_editor_must_save_new_version(self):
+        self.recipe.last_edited_by = self.owner
+        self.recipe.save(update_fields=["last_edited_by", "updated_at"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:update", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "create a new version")
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **self._edit_post_data(title="Cousin revision"),
+                **recipe_edit_save_post_ack(mode="update"),
+            },
+        )
+
+        self.assertEqual(self.recipe.lineage.versions.count(), 2)
+        self.recipe.refresh_from_db()
+        self.assertEqual(self.recipe.title, "Sunday Pancakes")
+        new_version = self.recipe.lineage.versions.order_by("-version_number").first()
+        assert new_version is not None
+        self.assertEqual(new_version.title, "Cousin revision")
+        self.assertEqual(new_version.last_edited_by, self.other_user)
+
+    def test_last_editor_can_update_in_place(self):
+        self.recipe.last_edited_by = self.owner
+        self.recipe.save(update_fields=["last_edited_by", "updated_at"])
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            self._edit_post_data(title="Owner tweak"),
+        )
+
+        self.recipe.refresh_from_db()
+        self.assertEqual(self.recipe.lineage.versions.count(), 1)
+        self.assertEqual(self.recipe.title, "Owner tweak")
+        self.assertEqual(self.recipe.last_edited_by, self.owner)
+
+    def test_detail_defaults_to_latest_version(self):
+        self.client.force_login(self.other_user)
+        lineage = self.recipe.lineage
+        version_two = Recipe.objects.create(
+            lineage=lineage,
+            version_number=2,
+            owner=self.owner,
+            title="Sunday Pancakes v2",
+            description="Extra fluffy.",
+        )
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertEqual(response.context["recipe"].pk, version_two.pk)
+        self.assertContains(response, "Sunday Pancakes v2")
+        self.assertContains(response, "recipe-version-nav")
+        self.assertContains(response, "Latest version")
+        self.assertNotContains(response, "Older version")
+
+    def test_detail_can_view_specific_version(self):
+        self.client.force_login(self.other_user)
+        lineage = self.recipe.lineage
+        Recipe.objects.create(
+            lineage=lineage,
+            version_number=2,
+            owner=self.owner,
+            title="Sunday Pancakes v2",
+            description="Extra fluffy.",
+        )
+
+        response = self.client.get(
+            f"{reverse('recipes:detail', kwargs={'slug': self.recipe.slug})}?version=1",
+        )
+
+        self.assertEqual(response.context["recipe"].pk, self.recipe.pk)
+        self.assertContains(response, "recipe-version-nav")
+        self.assertContains(response, "v1")
+        self.assertContains(response, "Older version")
+        self.assertContains(response, 'aria-label="Next version"')
+
+    def test_edit_shows_version_save_modal_before_redirect(self):
+        self.client.force_login(self.owner)
+        post_data = self._edit_post_data(title="Sunday Pancakes revised")
+        post_data.pop("version_save_mode", None)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            post_data,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "recipe-version-save-modal")
+        self.assertContains(response, "Save as new version")
+
+    def test_save_as_new_version_creates_second_version(self):
+        self.client.force_login(self.owner)
+        original_pk = self.recipe.pk
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **self._edit_post_data(title="Sunday Pancakes revised", description="New desc."),
+                **recipe_edit_save_post_ack(mode="new_version"),
+            },
+        )
+
+        self.recipe.refresh_from_db()
+        versions = list(self.recipe.lineage.versions.order_by("version_number"))
+        self.assertEqual(len(versions), 2)
+        self.assertEqual(versions[0].pk, original_pk)
+        self.assertEqual(versions[1].title, "Sunday Pancakes revised")
+        self.assertEqual(versions[1].version_number, 2)
+        self.assertRedirects(response, versions[1].get_absolute_url())
+
+    def test_save_as_new_version_preserves_unedited_ingredients_and_steps(self):
+        self.client.force_login(self.owner)
+        original_ingredient_count = self.recipe.ingredients.count()
+        original_step_count = self.recipe.steps.count()
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **self._edit_post_data(title="Sunday Pancakes revised"),
+                **recipe_edit_save_post_ack(mode="new_version"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.recipe.refresh_from_db()
+        new_recipe = self.recipe.lineage.versions.order_by("-version_number").first()
+        assert new_recipe is not None
+        self.assertEqual(self.recipe.ingredients.count(), original_ingredient_count)
+        self.assertEqual(self.recipe.steps.count(), original_step_count)
+        self.assertEqual(new_recipe.title, "Sunday Pancakes revised")
+        self.assertEqual(new_recipe.description, self.recipe.description)
+        self.assertEqual(new_recipe.ingredients.count(), original_ingredient_count)
+        self.assertEqual(new_recipe.steps.count(), original_step_count)
+        self.assertEqual(
+            list(new_recipe.ingredients.order_by("order").values_list("name", flat=True)),
+            list(self.recipe.ingredients.order_by("order").values_list("name", flat=True)),
+        )
+
+    def test_update_current_version_keeps_same_row(self):
+        self.client.force_login(self.owner)
+        original_pk = self.recipe.pk
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            self._edit_post_data(title="Sunday Pancakes revised"),
+        )
+
+        self.recipe.refresh_from_db()
+        self.assertEqual(self.recipe.pk, original_pk)
+        self.assertEqual(self.recipe.title, "Sunday Pancakes revised")
+        self.assertEqual(self.recipe.lineage.versions.count(), 1)
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+
+    def test_comments_show_version_number(self):
+        self.client.force_login(self.other_user)
+        lineage = self.recipe.lineage
+        version_two = Recipe.objects.create(
+            lineage=lineage,
+            version_number=2,
+            owner=self.owner,
+            title="Sunday Pancakes v2",
+            description="Extra fluffy.",
+        )
+        Comment.objects.create(
+            recipe=self.recipe,
+            author=self.other_user,
+            body="Version one tip",
+        )
+        Comment.objects.create(
+            recipe=version_two,
+            author=self.owner,
+            body="Version two tip",
+        )
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "Version one tip")
+        self.assertContains(response, "Version two tip")
+        self.assertContains(response, "Version 1")
+        self.assertContains(response, "Version 2")
+
+    def test_ratings_are_per_version(self):
+        self.client.force_login(self.other_user)
+        lineage = self.recipe.lineage
+        version_two = Recipe.objects.create(
+            lineage=lineage,
+            version_number=2,
+            owner=self.owner,
+            title="Sunday Pancakes v2",
+            description="Extra fluffy.",
+        )
+        Rating.objects.create(recipe=self.recipe, user=self.owner, value=3)
+        Rating.objects.create(recipe=version_two, user=self.other_user, value=5)
+
+        latest = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+        self.assertContains(latest, "5.0 ★ (1)")
+        self.assertContains(latest, "Ratings from all versions.")
+        self.assertContains(latest, "Version 1")
+        self.assertContains(latest, "Version 2")
+        self.assertContains(latest, "Pat B.")
+        self.assertContains(latest, "Sam C.")
+
+        older = self.client.get(
+            f"{reverse('recipes:detail', kwargs={'slug': self.recipe.slug})}?version=1",
+        )
+        self.assertContains(older, "3.0 ★ (1)")
+        self.assertContains(older, "Version 1")
+        self.assertContains(older, "Version 2")
+
+    def test_list_shows_only_latest_version(self):
+        lineage = self.recipe.lineage
+        Recipe.objects.create(
+            lineage=lineage,
+            version_number=2,
+            owner=self.owner,
+            title="Sunday Pancakes v2",
+            description="Extra fluffy.",
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:list"))
+
+        self.assertContains(response, "Sunday Pancakes v2")
+        self.assertNotContains(response, "Fluffy pancakes for slow mornings.")
 
 
 @override_settings(DEBUG=False)

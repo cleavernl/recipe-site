@@ -195,6 +195,7 @@ class RecipeImportUrlForm(forms.Form):
 
 class RecipeForm(forms.ModelForm):
     similar_tags_ack = forms.CharField(required=False, widget=forms.HiddenInput)
+    version_save_mode = forms.CharField(required=False, widget=forms.HiddenInput)
 
     source_url = forms.URLField(required=False, assume_scheme="https")
 

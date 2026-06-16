@@ -80,6 +80,42 @@ def sync_recipe_tags(recipe: Recipe, raw: str) -> None:
     recipe.tags.set(tags_from_parsed_names(names))
 
 
+class RecipeLineage(models.Model):
+    """Shared identity for all versions of one recipe (canonical URL slug)."""
+
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["slug", "id"]
+
+    def __str__(self) -> str:
+        return self.slug or f"Lineage {self.pk}"
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = self._make_unique_slug("recipe")
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def create_for_title(cls, title: str) -> RecipeLineage:
+        base_slug = slugify(title) or "recipe"
+        slug = cls._unique_slug(base_slug)
+        return cls.objects.create(slug=slug)
+
+    @classmethod
+    def _unique_slug(cls, base_slug: str) -> str:
+        slug = base_slug
+        counter = 2
+        while cls.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        return slug
+
+    def _make_unique_slug(self, fallback: str) -> str:
+        return self._unique_slug(slugify(fallback) or fallback)
+
+
 class Recipe(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -88,8 +124,20 @@ class Recipe(models.Model):
         blank=True,
         related_name="recipes",
     )
+    last_edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recipes_last_edited",
+    )
+    lineage = models.ForeignKey(
+        RecipeLineage,
+        on_delete=models.CASCADE,
+        related_name="versions",
+    )
+    version_number = models.PositiveIntegerField(default=1)
     title = models.CharField(max_length=180)
-    slug = models.SlugField(max_length=220, unique=True, blank=True)
     description = models.TextField(blank=True)
     prep_time_minutes = models.PositiveIntegerField(null=True, blank=True)
     cook_time_minutes = models.PositiveIntegerField(null=True, blank=True)
@@ -103,26 +151,36 @@ class Recipe(models.Model):
 
     class Meta:
         ordering = ["title"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lineage", "version_number"],
+                name="unique_recipe_version_per_lineage",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.title
 
+    @property
+    def slug(self) -> str:
+        return self.lineage.slug
+
     def save(self, *args, **kwargs) -> None:
-        if not self.slug:
-            self.slug = self._make_unique_slug()
+        if not self.lineage_id:
+            self.lineage = RecipeLineage.create_for_title(self.title)
         super().save(*args, **kwargs)
 
-    def _make_unique_slug(self) -> str:
-        base_slug = slugify(self.title) or "recipe"
-        slug = base_slug
-        counter = 2
-        while Recipe.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-        return slug
-
     def get_absolute_url(self) -> str:
-        return reverse("recipes:detail", kwargs={"slug": self.slug})
+        url = reverse("recipes:detail", kwargs={"slug": self.lineage.slug})
+        latest_number = (
+            self.lineage.versions.filter(deleted_at__isnull=True)
+            .order_by("-version_number", "-id")
+            .values_list("version_number", flat=True)
+            .first()
+        )
+        if latest_number and self.version_number != latest_number:
+            return f"{url}?version={self.version_number}"
+        return url
 
     @property
     def total_time_minutes(self) -> int | None:

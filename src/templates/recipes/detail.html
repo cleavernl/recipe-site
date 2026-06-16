@@ -41,43 +41,76 @@
               </div>
             </details>
             {% endif %}
-            <a class="button secondary" href="{% url 'recipes:update' recipe.slug %}">Edit</a>
+            <a class="button secondary" href="{% url 'recipes:update' recipe.slug %}{% if not is_latest_version %}?version={{ recipe.version_number }}{% endif %}">Edit</a>
           {% endif %}
           {% if not recipe.deleted_at %}
             <a class="button danger" href="{% url 'recipes:delete' recipe.slug %}">Delete</a>
           {% endif %}
         </div>
       </div>
-      <div>
-        <h1>{{ recipe.title }}</h1>
-        {% if recipe.description %}<div class="lede recipe-markdown">{{ recipe.description|recipe_markdown }}</div>{% endif %}
-        {% if recipe.tags.all %}
-          <div class="tag-overflow recipe-detail-tags-overflow" data-tag-overflow>
-            <div class="tag-overflow-main" data-tag-overflow-main>
-              <ul class="recipe-tag-list tag-overflow-row" data-tag-overflow-row aria-label="Tags">
-                {% for tag in recipe.tags.all %}
-                  <li>
-                    <a class="recipe-tag-link" href="{% url 'recipes:list' %}?tag={{ tag.slug|urlencode }}">{{ tag.name }}</a>
-                  </li>
-                {% endfor %}
-              </ul>
-              <details class="tag-overflow-details" data-tag-overflow-details hidden>
-                <summary class="tag-overflow-summary" aria-label="More tags for this recipe">
-                  +<span data-tag-overflow-count>0</span>
-                </summary>
-                <div class="tag-overflow-panel-shell">
-                  <ul class="recipe-tag-list tag-overflow-panel-list" data-tag-overflow-panel></ul>
-                </div>
-              </details>
+      <div class="recipe-header-title-row">
+        <div class="recipe-header-title-block">
+          <h1>{{ recipe.title }}</h1>
+          {% if recipe.description %}<div class="lede recipe-markdown">{{ recipe.description|recipe_markdown }}</div>{% endif %}
+          {% if recipe.tags.all %}
+            <div class="tag-overflow recipe-detail-tags-overflow" data-tag-overflow>
+              <div class="tag-overflow-main" data-tag-overflow-main>
+                <ul class="recipe-tag-list tag-overflow-row" data-tag-overflow-row aria-label="Tags">
+                  {% for tag in recipe.tags.all %}
+                    <li>
+                      <a class="recipe-tag-link" href="{% url 'recipes:list' %}?tag={{ tag.slug|urlencode }}">{{ tag.name }}</a>
+                    </li>
+                  {% endfor %}
+                </ul>
+                <details class="tag-overflow-details" data-tag-overflow-details hidden>
+                  <summary class="tag-overflow-summary" aria-label="More tags for this recipe">
+                    +<span data-tag-overflow-count>0</span>
+                  </summary>
+                  <div class="tag-overflow-panel-shell">
+                    <ul class="recipe-tag-list tag-overflow-panel-list" data-tag-overflow-panel></ul>
+                  </div>
+                </details>
+              </div>
             </div>
-          </div>
+          {% endif %}
+        </div>
+        {% if show_version_nav %}
+          <nav class="recipe-version-nav" aria-label="Recipe version">
+            {% if version_has_prev %}
+              <a class="recipe-version-arrow" href="{{ version_prev_url }}" aria-label="Previous version">←</a>
+            {% else %}
+              <span class="recipe-version-arrow is-disabled" aria-hidden="true">←</span>
+            {% endif %}
+            <div
+              class="recipe-version-display"
+              aria-label="Version {{ recipe.version_number }}{% if not is_latest_version %}, older version{% elif version_total > 1 %}, latest version{% endif %}"
+            >
+              <span class="recipe-version-number">v{{ recipe.version_number }}</span>
+              {% if not is_latest_version %}
+                <span class="recipe-version-status">
+                  <span class="recipe-version-status-long">Older version</span>
+                  <span class="recipe-version-status-short" aria-hidden="true">Older</span>
+                </span>
+              {% elif version_total > 1 %}
+                <span class="recipe-version-status">
+                  <span class="recipe-version-status-long">Latest version</span>
+                  <span class="recipe-version-status-short" aria-hidden="true">Latest</span>
+                </span>
+              {% endif %}
+            </div>
+            {% if version_has_next %}
+              <a class="recipe-version-arrow" href="{{ version_next_url }}" aria-label="Next version">→</a>
+            {% else %}
+              <span class="recipe-version-arrow is-disabled" aria-hidden="true">→</span>
+            {% endif %}
+          </nav>
         {% endif %}
       </div>
     </header>
 
     {% if not recipe.deleted_at %}
       <div class="make-this-cta">
-        <a class="button make-this-button" href="{% url 'recipes:make' recipe.slug %}">Make This</a>
+        <a class="button make-this-button" href="{% url 'recipes:make' recipe.slug %}{% if not is_latest_version %}?version={{ recipe.version_number }}{% endif %}">Make This</a>
       </div>
     {% endif %}
 
@@ -187,9 +220,9 @@
         <section class="rating-card{% if prompt_review %} is-prompt-review-focus{% endif %}">
           <div class="rating-section-header">
             <h3>Your rating</h3>
-            <p>Tap a star to rate. Tap your score again to remove it.</p>
+            <p>Tap a star to rate this version. Tap your score again to remove it.</p>
           </div>
-          <form class="rating-form star-rating-form" method="post" action="{% url 'recipes:rate' recipe.slug %}#discussion">
+          <form class="rating-form star-rating-form" method="post" action="{% url 'recipes:rate' recipe.slug %}{% if not is_latest_version %}?version={{ recipe.version_number }}{% endif %}#discussion">
             {% csrf_token %}
             <div class="star-rating-field" role="radiogroup" aria-label="Recipe rating">
               {% for radio in rating_form.value %}
@@ -209,7 +242,7 @@
         <section class="rating-card">
           <div class="rating-section-header">
             <h3>Overall rating</h3>
-            <p>Average from everyone who has rated this recipe.</p>
+            <p>Average from everyone who has rated this version.</p>
           </div>
           <div class="average-rating">
             <span
@@ -238,14 +271,21 @@
       <section class="rating-card reviewer-card">
         <div class="rating-section-header">
           <h3>Reviewers</h3>
-          <p>Most recent ratings.</p>
+          <p>Ratings from all versions.</p>
         </div>
         <div class="reviewer-list" data-rating-breakdown>
-          {% if recipe.rating_count %}
+          {% if lineage_ratings %}
             <ul data-rating-breakdown-list>
-              {% for rating in ratings %}
-                <li data-rating-user-id="{{ rating.user_id }}">
-                  <span data-rating-reviewer-name>{{ rating.user_name }}{% if rating.is_current_user %} <span class="reviewer-you">(you)</span>{% endif %}</span>
+              {% for rating in lineage_ratings %}
+                <li
+                  data-rating-id="{{ rating.id }}"
+                  data-rating-user-id="{{ rating.user_id }}"
+                  data-rating-version="{{ rating.version_number }}"
+                >
+                  <div class="reviewer-meta">
+                    <span data-rating-reviewer-name>{{ rating.user_name }}{% if rating.is_current_user %} <span class="reviewer-you">(you)</span>{% endif %}</span>
+                    <span class="comment-version">Version {{ rating.version_number }}</span>
+                  </div>
                   <strong
                     class="star-meter reviewer-stars"
                     style="--rating-percent: {{ rating.value_percent }}%;"
@@ -267,8 +307,8 @@
     <div class="comments-header">
       <h2>Comments</h2>
       <div class="comment-sort" aria-label="Comment sort order">
-        <a class="{% if comment_sort == 'oldest' %}is-active{% endif %}" href="?comments=oldest#discussion" data-comment-sort="oldest">Oldest first</a>
-        <a class="{% if comment_sort == 'newest' %}is-active{% endif %}" href="?comments=newest#discussion" data-comment-sort="newest">Newest first</a>
+        <a class="{% if comment_sort == 'oldest' %}is-active{% endif %}" href="?{% if not is_latest_version %}version={{ recipe.version_number }}&{% endif %}comments=oldest#discussion" data-comment-sort="oldest">Oldest first</a>
+        <a class="{% if comment_sort == 'newest' %}is-active{% endif %}" href="?{% if not is_latest_version %}version={{ recipe.version_number }}&{% endif %}comments=newest#discussion" data-comment-sort="newest">Newest first</a>
       </div>
     </div>
     <div data-comments-list>
@@ -283,6 +323,7 @@
           </div>
           <footer class="comment-meta">
             <strong>{{ comment.author_name }}</strong>
+            <span class="comment-version">Version {{ comment.version_number }}</span>
             <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time>
           </footer>
         </article>
@@ -291,7 +332,7 @@
       {% endfor %}
     </div>
 
-    <form id="comment-form" method="post" action="{% url 'recipes:comment' recipe.slug %}">
+    <form id="comment-form" method="post" action="{% url 'recipes:comment' recipe.slug %}{% if not is_latest_version %}?version={{ recipe.version_number }}{% endif %}">
       {% csrf_token %}
       <p>
         <label class="sr-only" for="{{ comment_form.body.id_for_label }}">Comment</label>
