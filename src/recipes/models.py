@@ -6,6 +6,8 @@ from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
 
+from recipes.recipe_export import format_ingredient_export_line
+
 
 class Tag(models.Model):
     """Short labels shared across recipes (e.g. weeknight, vegetarian)."""
@@ -201,8 +203,7 @@ class Ingredient(models.Model):
         ordering = ["order", "id"]
 
     def __str__(self) -> str:
-        parts = [self.quantity, self.name, self.notes]
-        return " ".join(part for part in parts if part)
+        return format_ingredient_export_line(self)
 
 
 class RecipePhoto(models.Model):

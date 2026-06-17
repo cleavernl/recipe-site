@@ -2091,6 +2091,101 @@ form p {
   align-self: flex-start;
 }
 
+.actions-divider {
+  align-self: stretch;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0.15rem 0.1rem;
+  width: 1px;
+}
+
+.recipe-share {
+  position: relative;
+}
+
+.recipe-share-summary {
+  list-style: none;
+}
+
+.recipe-share-summary::marker {
+  content: "";
+}
+
+.recipe-share-summary::-webkit-details-marker {
+  display: none;
+}
+
+.recipe-share-summary svg.recipe-share-icon {
+  display: block;
+  height: 1.15rem;
+  width: 1.15rem;
+}
+
+.recipe-share-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+  box-sizing: border-box;
+  margin-top: 0.4rem;
+  min-width: 11rem;
+  padding: 0.35rem;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+}
+
+.recipe-share-option {
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+}
+
+.recipe-share-option:hover,
+.recipe-share-option:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  outline: none;
+}
+
+.recipe-share-section-label {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin: 0.35rem 0 0;
+  padding: 0.55rem 0.75rem 0.15rem;
+  text-transform: uppercase;
+}
+
+.actions .recipe-share {
+  align-self: flex-start;
+}
+
+.make-this-cta .recipe-share-summary {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.make-this-cta .recipe-share-summary:hover,
+.make-this-cta .recipe-share-summary:focus-visible {
+  background: var(--accent-soft);
+  border-color: rgba(109, 78, 201, 0.22);
+  color: var(--accent-dark);
+}
+
 .formset {
   border-top: 1px solid var(--border);
   margin-top: 1.5rem;
@@ -3661,6 +3756,9 @@ form p {
 }
 
 .make-this-cta {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
   margin-bottom: 1.25rem;
   margin-top: 1.75rem;
 }
@@ -3797,10 +3895,15 @@ body.make-exit-open {
 
 .make-this-button {
   display: block;
+  flex: 1 1 auto;
   font-size: clamp(1.15rem, 3vw, 1.35rem);
   padding: 1.15rem 1.5rem;
   text-align: center;
-  width: 100%;
+  width: auto;
+}
+
+.make-this-cta .recipe-share {
+  flex-shrink: 0;
 }
 
 body:has([data-make-mode]) .site-header {

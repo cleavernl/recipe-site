@@ -24,6 +24,7 @@ from recipes.models import (
     Tag,
     sync_recipe_tags,
 )
+from recipes.recipe_export import build_recipe_json_ld, format_ingredient_export_line
 from recipes.views import (
     RECENTLY_DELETED_HOME_LIMIT,
     RECENTLY_MADE_HOME_LIMIT,
@@ -1434,6 +1435,59 @@ class RecipeWorkflowTests(TestCase):
             response,
             reverse("recipes:make", kwargs={"slug": self.recipe.slug}),
         )
+
+    def test_recipe_detail_shows_share_button(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, "data-recipe-share")
+        self.assertContains(response, 'class="make-this-cta"')
+        self.assertContains(response, 'aria-label="Share recipe"')
+        self.assertContains(response, "Copy link")
+        self.assertContains(response, "Email")
+        self.assertContains(response, "Copy ingredients")
+        self.assertContains(response, "data-share-copy-ingredients")
+        self.assertContains(response, 'id="recipe-share-ingredients"')
+        self.assertContains(response, "2 cups flour")
+        self.assertContains(
+            response,
+            reverse("recipes:detail", kwargs={"slug": self.recipe.slug}),
+        )
+
+    def test_recipe_detail_includes_json_ld_recipe(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, 'type="application/ld+json"')
+        self.assertContains(response, '"@type": "Recipe"')
+        self.assertContains(response, '"recipeIngredient"')
+        self.assertContains(response, "2 cups flour")
+        self.assertContains(response, "Mix and cook.")
+
+    def test_format_ingredient_export_line(self):
+        ingredient = Ingredient(quantity="1 tsp", name="salt", notes="fine")
+        self.assertEqual(format_ingredient_export_line(ingredient), "1 tsp salt fine")
+        self.assertEqual(
+            format_ingredient_export_line(Ingredient(name="eggs", quantity="", notes="")),
+            "eggs",
+        )
+
+    def test_build_recipe_json_ld(self):
+        self.client.force_login(self.other_user)
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+        request = response.wsgi_request
+        data = build_recipe_json_ld(self.recipe, request)
+
+        self.assertEqual(data["@type"], "Recipe")
+        self.assertEqual(data["name"], "Sunday Pancakes")
+        self.assertEqual(data["recipeIngredient"], ["2 cups flour"])
+        self.assertEqual(data["prepTime"], "PT10M")
+        self.assertEqual(data["cookTime"], "PT15M")
+        self.assertEqual(data["totalTime"], "PT25M")
+        self.assertEqual(data["recipeYield"], "4")
+        self.assertEqual(len(data["recipeInstructions"]), 1)
 
     def test_recipe_detail_hides_make_this_when_deleted(self):
         self.recipe.deleted_at = timezone.now()

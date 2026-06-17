@@ -4,6 +4,7 @@
 {% block title %}{{ recipe.title }} - Family Recipes{% endblock %}
 
 {% block content %}
+  {% include "recipes/_recipe_jsonld.html" %}
   <article class="recipe-detail">
     {% if recipe.deleted_at %}
       <div class="deleted-banner">
@@ -25,6 +26,7 @@
         <div class="actions">
           <button class="button secondary" type="button" data-print-recipe>Print</button>
           {% if not recipe.deleted_at and can_edit %}
+            <span class="actions-divider" aria-hidden="true"></span>
             {% if quick_tag_form %}
             <details class="recipe-quick-tag">
               <summary class="button secondary recipe-quick-tag-summary">Add tag</summary>
@@ -111,6 +113,7 @@
     {% if not recipe.deleted_at %}
       <div class="make-this-cta">
         <a class="button make-this-button" href="{% url 'recipes:make' recipe.slug %}{% if not is_latest_version %}?version={{ recipe.version_number }}{% endif %}">Make This</a>
+        {% include "recipes/_recipe_share.html" %}
       </div>
     {% endif %}
 

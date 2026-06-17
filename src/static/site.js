@@ -524,6 +524,153 @@ document.addEventListener("DOMContentLoaded", () => {
     button.addEventListener("click", () => window.print());
   });
 
+  document.querySelectorAll("[data-recipe-share]").forEach((details) => {
+    if (!(details instanceof HTMLDetailsElement)) {
+      return;
+    }
+    const title = details.dataset.shareTitle || document.title;
+    const url = details.dataset.shareUrl || window.location.href;
+    const summary = details.querySelector(".recipe-share-summary");
+    const copyButton = details.querySelector("[data-share-copy]");
+    const emailButton = details.querySelector("[data-share-email]");
+    const copyIngredientsButton = details.querySelector("[data-share-copy-ingredients]");
+    const shareIngredientsButton = details.querySelector("[data-share-share-ingredients]");
+    if (shareIngredientsButton instanceof HTMLButtonElement && typeof navigator.share === "function") {
+      shareIngredientsButton.hidden = false;
+    }
+    let onDocClick = null;
+
+    const readShareIngredients = () => {
+      const dataEl = document.getElementById("recipe-share-ingredients");
+      if (!(dataEl instanceof HTMLScriptElement)) {
+        return [];
+      }
+      try {
+        const lines = JSON.parse(dataEl.textContent || "[]");
+        return Array.isArray(lines)
+          ? lines.filter((line) => typeof line === "string" && line.trim())
+          : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const closeShareMenu = () => {
+      details.open = false;
+    };
+
+    const copyShareLink = async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("Link copied to clipboard.", "success");
+      } catch {
+        showToast("Could not copy link.", "error");
+      }
+      closeShareMenu();
+    };
+
+    const emailShareLink = () => {
+      const subject = encodeURIComponent(title);
+      const body = encodeURIComponent(`Check out this recipe: ${url}`);
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+      closeShareMenu();
+    };
+
+    const copyShareIngredients = async () => {
+      const lines = readShareIngredients();
+      if (!lines.length) {
+        showToast("No ingredients to copy.", "error");
+        closeShareMenu();
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        showToast("Ingredients copied to clipboard.", "success");
+      } catch {
+        showToast("Could not copy ingredients.", "error");
+      }
+      closeShareMenu();
+    };
+
+    const shareShareIngredients = async () => {
+      const lines = readShareIngredients();
+      if (!lines.length) {
+        showToast("No ingredients to share.", "error");
+        closeShareMenu();
+        return;
+      }
+      const text = lines.join("\n");
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({ title: `${title} ingredients`, text });
+          closeShareMenu();
+          return;
+        } catch (err) {
+          if (err.name === "AbortError") {
+            return;
+          }
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Ingredients copied to clipboard.", "success");
+      } catch {
+        showToast("Could not share ingredients.", "error");
+      }
+      closeShareMenu();
+    };
+
+    summary?.addEventListener("click", (event) => {
+      if (typeof navigator.share !== "function") {
+        return;
+      }
+      event.preventDefault();
+      closeShareMenu();
+      navigator
+        .share({ title, url, text: `Check out this recipe: ${title}` })
+        .catch((err) => {
+          if (err.name === "AbortError") {
+            return;
+          }
+          details.open = true;
+        });
+    });
+
+    copyButton?.addEventListener("click", () => {
+      void copyShareLink();
+    });
+
+    emailButton?.addEventListener("click", () => {
+      emailShareLink();
+    });
+
+    copyIngredientsButton?.addEventListener("click", () => {
+      void copyShareIngredients();
+    });
+
+    shareIngredientsButton?.addEventListener("click", () => {
+      void shareShareIngredients();
+    });
+
+    details.addEventListener("toggle", () => {
+      if (onDocClick) {
+        document.removeEventListener("click", onDocClick);
+        onDocClick = null;
+      }
+      if (!details.open) {
+        return;
+      }
+      onDocClick = (event) => {
+        if (!(event.target instanceof Node) || !details.contains(event.target)) {
+          closeShareMenu();
+        }
+      };
+      window.setTimeout(() => {
+        document.addEventListener("click", onDocClick);
+      }, 0);
+    });
+  });
+
   (() => {
     const root = document.querySelector("[data-make-mode]");
     if (!root) {

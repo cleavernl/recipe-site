@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 import re
 from collections import Counter
@@ -49,6 +50,7 @@ from recipes.forms import (
 )
 from recipes.models import Comment, Rating, Recipe, RecipeLineage, RecipeMade, Tag, sync_recipe_tags
 from recipes.photo_sync import sync_legacy_recipe_photo_to_gallery
+from recipes.recipe_export import build_recipe_json_ld, ingredient_export_lines
 from recipes.versioning import (
     copy_gallery_photo_for_new_version,
     create_recipe_version_from_form,
@@ -743,6 +745,11 @@ class RecipeDetailView(PrivateRecipeMixin, DetailView):
         if context["can_edit"] and recipe.deleted_at is None:
             context["quick_tag_form"] = RecipeQuickAddTagForm()
             context["tag_suggestions"] = tag_suggestions_queryset()
+        context["share_ingredient_lines"] = ingredient_export_lines(recipe)
+        context["recipe_json_ld"] = json.dumps(
+            build_recipe_json_ld(recipe, self.request),
+            ensure_ascii=False,
+        )
         return context
 
 
