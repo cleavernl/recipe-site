@@ -4,6 +4,7 @@
     {% if img_class %}class="{{ img_class }}"{% endif %}
     {% if defer_src %}data-src{% else %}src{% endif %}="{{ src }}"
     alt="{{ alt|default:'' }}"
+    {% if itemprop %}itemprop="{{ itemprop }}"{% endif %}
     {% if lazy %}loading="lazy" decoding="async"{% endif %}
   >
 </div>

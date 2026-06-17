@@ -10,7 +10,7 @@ Users want to send recipe ingredients to shopping list apps (especially AnyList)
 ## Decision
 
 1. **Universal export:** Copy or Web Share a plain-text ingredient list (one line per ingredient: quantity, name, notes). Works with paste into AnyList, OurGroceries, Reminders, Messages, etc.
-2. **AnyList recipe import:** Emit schema.org `Recipe` JSON-LD on the authenticated recipe detail page so AnyList’s browser extension and mobile “Recipe Import” action can parse the **open page** while the user is logged in.
+2. **AnyList recipe import:** Emit schema.org `Recipe` as JSON-LD, HTML microdata (`itemscope` / `itemprop`), and hRecipe classes (`hrecipe`, `fn`, `ingredient`, `instructions`) on the authenticated recipe detail page so AnyList’s browser extension and mobile “Recipe Import” action can parse the **open page** while the user is logged in.
 3. **No third-party credentials:** Do not store AnyList/B Bring logins or call unofficial shopping-list APIs from the server.
 
 ## Consequences

@@ -5,7 +5,11 @@
 
 {% block content %}
   {% include "recipes/_recipe_jsonld.html" %}
-  <article class="recipe-detail">
+  <article class="recipe-detail hrecipe" itemscope itemtype="https://schema.org/Recipe">
+    <link itemprop="url" href="{{ request.build_absolute_uri }}">
+    {% if recipe.prep_time_minutes %}<meta itemprop="prepTime" content="PT{{ recipe.prep_time_minutes }}M">{% endif %}
+    {% if recipe.cook_time_minutes %}<meta itemprop="cookTime" content="PT{{ recipe.cook_time_minutes }}M">{% endif %}
+    {% if recipe.total_time_minutes %}<meta itemprop="totalTime" content="PT{{ recipe.total_time_minutes }}M">{% endif %}
     {% if recipe.deleted_at %}
       <div class="deleted-banner">
         <strong>Recently deleted.</strong>
@@ -21,7 +25,16 @@
       <div class="recipe-header-top">
         <div class="recipe-title-meta">
           <a class="button secondary icon-only-button" href="{% url 'recipes:list' %}" aria-label="Back to recipes">←</a>
-          <p class="eyebrow">Shared by {% if recipe.owner %}{{ recipe.owner.get_full_name|default:recipe.owner.username }}{% else %}a former member{% endif %}</p>
+          <p class="eyebrow">
+            Shared by
+            {% if recipe.owner %}
+              <span itemprop="author" itemscope itemtype="https://schema.org/Person">
+                <span itemprop="name">{{ recipe.owner.get_full_name|default:recipe.owner.username }}</span>
+              </span>
+            {% else %}
+              a former member
+            {% endif %}
+          </p>
         </div>
         <div class="actions">
           <button class="button secondary" type="button" data-print-recipe>Print</button>
@@ -52,8 +65,8 @@
       </div>
       <div class="recipe-header-title-row">
         <div class="recipe-header-title-block">
-          <h1>{{ recipe.title }}</h1>
-          {% if recipe.description %}<div class="lede recipe-markdown">{{ recipe.description|recipe_markdown }}</div>{% endif %}
+          <h1 class="fn" itemprop="name">{{ recipe.title }}</h1>
+          {% if recipe.description %}<div class="lede recipe-markdown summary" itemprop="description">{{ recipe.description|recipe_markdown }}</div>{% endif %}
           {% if recipe.tags.all %}
             <div class="tag-overflow recipe-detail-tags-overflow" data-tag-overflow>
               <div class="tag-overflow-main" data-tag-overflow-main>
@@ -119,7 +132,7 @@
 
     {% if recipe.photos.all %}
       {% with hero_photo=recipe.photos.first %}
-        {% include "recipes/_recipe_image.html" with src=hero_photo.image.url alt=hero_photo.caption frame_class="hero-photo-frame" img_class="hero-photo" %}
+        {% include "recipes/_recipe_image.html" with src=hero_photo.image.url alt=hero_photo.caption frame_class="hero-photo-frame" img_class="hero-photo photo" itemprop="image" %}
         {% if recipe.photos.count > 1 %}
           <section class="photo-gallery" aria-label="Recipe photos">
             {% for photo in recipe.photos.all %}
@@ -134,14 +147,14 @@
         {% endif %}
       {% endwith %}
     {% elif recipe.photo %}
-      {% include "recipes/_recipe_image.html" with src=recipe.photo.url alt="" frame_class="hero-photo-frame" img_class="hero-photo" %}
+      {% include "recipes/_recipe_image.html" with src=recipe.photo.url alt="" frame_class="hero-photo-frame" img_class="hero-photo photo" itemprop="image" %}
     {% endif %}
 
     <dl class="meta-list large">
       {% if recipe.prep_time_minutes %}<div><dt>Prep</dt><dd>{{ recipe.prep_time_minutes }} min</dd></div>{% endif %}
       {% if recipe.cook_time_minutes %}<div><dt>Cook</dt><dd>{{ recipe.cook_time_minutes }} min</dd></div>{% endif %}
       {% if recipe.total_time_minutes %}<div><dt>Total</dt><dd>{{ recipe.total_time_minutes }} min</dd></div>{% endif %}
-      {% if recipe.servings %}<div><dt>Serves</dt><dd>{{ recipe.servings }}</dd></div>{% endif %}
+      {% if recipe.servings %}<div><dt>Serves</dt><dd class="yield" itemprop="recipeYield">{{ recipe.servings }}</dd></div>{% endif %}
       <div>
         <dt>Rating</dt>
         <dd data-rating-summary>
@@ -162,7 +175,7 @@
         </div>
         <ul class="ingredient-list">
           {% for ingredient in recipe.ingredients.all %}
-            <li class="ingredient-line{% if not ingredient.quantity and not ingredient.notes %} ingredient-line--name-only{% endif %}">
+            <li class="ingredient-line ingredient{% if not ingredient.quantity and not ingredient.notes %} ingredient-line--name-only{% endif %}" itemprop="recipeIngredient">
               <span class="ingredient-name">{{ ingredient.name }}</span>
               <div class="ingredient-meta">
                 {% if ingredient.quantity %}
@@ -182,9 +195,9 @@
           <p class="eyebrow">Cook</p>
           <h2>Instructions</h2>
         </div>
-        <ol class="step-list">
+        <ol class="step-list instructions">
           {% for step in recipe.steps.all %}
-            <li class="recipe-markdown">{{ step.text|recipe_markdown }}</li>
+            <li class="recipe-markdown" itemprop="recipeInstructions">{{ step.text|recipe_markdown }}</li>
           {% endfor %}
         </ol>
       </section>

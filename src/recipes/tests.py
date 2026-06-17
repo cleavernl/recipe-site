@@ -1466,6 +1466,19 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, "2 cups flour")
         self.assertContains(response, "Mix and cook.")
 
+    def test_recipe_detail_includes_microdata_and_hrecipe(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+
+        self.assertContains(response, 'itemtype="https://schema.org/Recipe"')
+        self.assertContains(response, 'class="recipe-detail hrecipe"')
+        self.assertContains(response, 'itemprop="name"')
+        self.assertContains(response, 'itemprop="recipeIngredient"')
+        self.assertContains(response, 'class="ingredient-line ingredient')
+        self.assertContains(response, 'itemprop="recipeInstructions"')
+        self.assertContains(response, 'class="step-list instructions"')
+
     def test_format_ingredient_export_line(self):
         ingredient = Ingredient(quantity="1 tsp", name="salt", notes="fine")
         self.assertEqual(format_ingredient_export_line(ingredient), "1 tsp salt fine")
