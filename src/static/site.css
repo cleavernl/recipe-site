@@ -600,7 +600,7 @@ select:focus-visible {
   font-size: 1.05rem;
 }
 
-.step-list li.recipe-markdown > p {
+.step-list > li.recipe-markdown > p {
   margin: 0;
 }
 
@@ -1958,7 +1958,7 @@ form p {
   padding: 0;
 }
 
-.step-list li {
+.step-list > li {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 22px;
@@ -1971,7 +1971,7 @@ form p {
   padding: clamp(1rem, 3vw, 1.25rem);
 }
 
-.step-list li::before {
+.step-list > li::before {
   align-items: center;
   background: var(--accent);
   border-radius: 999px;
@@ -1979,6 +1979,8 @@ form p {
   content: counter(recipe-step);
   display: inline-flex;
   font-weight: 900;
+  grid-column: 1;
+  grid-row: 1;
   height: 2rem;
   justify-content: center;
   line-height: 1;
@@ -1986,7 +1988,14 @@ form p {
   width: 2rem;
 }
 
-.step-list li::marker {
+/* Keep markdown blocks in the text column. Direct children otherwise
+   auto-place into the number column and shove other paragraphs right. */
+.step-list > li > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.step-list > li::marker {
   content: "";
 }
 

@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import (
     Avg,
@@ -944,6 +945,9 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
         raw = (self.request.POST.get(form.add_prefix("DELETE")) or "").strip().lower()
         return raw in {"on", "true", "1", "yes", "y"}
 
+    def _is_new_photo_upload(self, value) -> bool:
+        return isinstance(value, UploadedFile)
+
     def save_photo_formset(self, recipe, photo_formset, *, for_new_version: bool = False) -> None:
         staged_paths: list[str] = []
         for form in photo_formset.forms:
@@ -962,8 +966,9 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
             order = form.cleaned_data.get("order")
             order_value = order if order is not None else 0
 
-            if uploaded:
-                form.instance.pk = None
+            if self._is_new_photo_upload(uploaded):
+                if for_new_version:
+                    form.instance.pk = None
                 form.instance.recipe = recipe
                 form.save()
                 if staged:
@@ -987,6 +992,12 @@ class RecipeFormMixin(PrivateRecipeMixin, TemplateView):
                     caption=caption or form.instance.caption,
                     order=order_value,
                 )
+                continue
+
+            if form.instance.pk:
+                form.instance.caption = caption
+                form.instance.order = order_value
+                form.instance.save(update_fields=["caption", "order"])
 
         cleanup_staged_photos(staged_paths)
 

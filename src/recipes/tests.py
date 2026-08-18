@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import shutil
 import tempfile
 from datetime import timedelta
@@ -11,6 +12,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from recipes.forms import RecipeTagLineFormSet
 from recipes.models import (
@@ -33,6 +35,12 @@ from recipes.views import (
     recently_deleted_recipes_for_home,
     recently_made_recipes_for_user,
 )
+
+
+def tiny_test_jpeg() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), color=(200, 100, 50)).save(buffer, format="JPEG")
+    return buffer.getvalue()
 
 
 def create_recipe_made(*, recipe: Recipe, user: User, made_at) -> RecipeMade:
@@ -95,11 +103,30 @@ def build_recipe_edit_post_data(
         "steps-0-id": str(step.id),
         "steps-0-text": step.text,
         "steps-0-order": "1",
-        "photos-TOTAL_FORMS": "1",
-        "photos-INITIAL_FORMS": "0",
+        **photo_formset_post_data([]),
+    }
+
+
+def photo_formset_post_data(
+    photos: list[RecipePhoto],
+    *,
+    extra: int = 1,
+    captions: dict[int, str] | None = None,
+) -> dict[str, str]:
+    """POST keys for the gallery photo formset (prefix ``photos``)."""
+    data: dict[str, str] = {
+        "photos-TOTAL_FORMS": str(len(photos) + extra),
+        "photos-INITIAL_FORMS": str(len(photos)),
         "photos-MIN_NUM_FORMS": "0",
         "photos-MAX_NUM_FORMS": "1000",
     }
+    for index, photo in enumerate(photos):
+        data[f"photos-{index}-id"] = str(photo.id)
+        data[f"photos-{index}-caption"] = (
+            captions[index] if captions and index in captions else photo.caption
+        )
+        data[f"photos-{index}-order"] = str(photo.order)
+    return data
 
 
 class RecipeWorkflowTests(TestCase):
@@ -919,6 +946,79 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, "photo-editor-preview")
         self.assertNotContains(response, "Currently:")
 
+    def test_saving_recipe_does_not_duplicate_existing_gallery_photo(self):
+        photo = RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile("gallery.jpg", b"fake-image", content_type="image/jpeg"),
+            caption="Hero",
+            order=1,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **build_recipe_edit_post_data(self.recipe),
+                **photo_formset_post_data([photo]),
+            },
+        )
+
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        photos = list(self.recipe.photos.all())
+        self.assertEqual(len(photos), 1)
+        self.assertEqual(photos[0].pk, photo.pk)
+        self.assertEqual(photos[0].caption, "Hero")
+
+    def test_saving_recipe_updates_existing_gallery_photo_caption(self):
+        photo = RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile("gallery.jpg", b"fake-image", content_type="image/jpeg"),
+            caption="Hero",
+            order=1,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **build_recipe_edit_post_data(self.recipe),
+                **photo_formset_post_data([photo], captions={0: "Family dinner"}),
+            },
+        )
+
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        photo.refresh_from_db()
+        self.assertEqual(self.recipe.photos.count(), 1)
+        self.assertEqual(photo.caption, "Family dinner")
+
+    def test_saving_recipe_can_add_another_gallery_photo(self):
+        photo = RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile("gallery.jpg", b"fake-image", content_type="image/jpeg"),
+            caption="Hero",
+            order=1,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **build_recipe_edit_post_data(self.recipe),
+                **photo_formset_post_data([photo]),
+                "photos-1-caption": "Plating",
+                "photos-1-order": "2",
+                "photos-1-image": SimpleUploadedFile(
+                    "plating.jpg",
+                    tiny_test_jpeg(),
+                    content_type="image/jpeg",
+                ),
+            },
+        )
+
+        self.assertRedirects(response, self.recipe.get_absolute_url())
+        captions = list(self.recipe.photos.order_by("order").values_list("caption", flat=True))
+        self.assertEqual(captions, ["Hero", "Plating"])
+
     def test_edit_recipe_shows_single_extra_rows_for_existing_items(self):
         self.client.force_login(self.owner)
         brunch = Tag.objects.create(name="Brunch", slug="brunch")
@@ -1046,6 +1146,25 @@ class RecipeWorkflowTests(TestCase):
         self.assertContains(response, "Second paragraph")
         self.assertContains(response, "<li>flip once</li>")
         self.assertContains(response, "serve hot")
+
+    def test_recipe_detail_keeps_multiline_step_paragraphs_in_one_item(self):
+        step = self.recipe.steps.get()
+        step.text = (
+            "Do Ahead: Chill under ½\" oil.\n\n"
+            "Can also be frozen.\n\n"
+            "Divide pasta among bowls."
+        )
+        step.save(update_fields=["text"])
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(reverse("recipes:detail", kwargs={"slug": self.recipe.slug}))
+        content = response.content.decode()
+
+        self.assertEqual(content.count('<li class="recipe-markdown"'), 1)
+        self.assertIn("Do Ahead: Chill under", content)
+        self.assertIn("Can also be frozen.", content)
+        self.assertIn("Divide pasta among bowls.", content)
+        self.assertGreaterEqual(content.count("<p>"), 3)
 
     def test_recipe_detail_renders_star_rating_form(self):
         Ingredient.objects.create(
@@ -1794,6 +1913,36 @@ class RecipeVersionTests(TestCase):
             list(new_recipe.ingredients.order_by("order").values_list("name", flat=True)),
             list(self.recipe.ingredients.order_by("order").values_list("name", flat=True)),
         )
+
+    def test_save_as_new_version_copies_gallery_photo_without_duplicating_original(self):
+        photo = RecipePhoto.objects.create(
+            recipe=self.recipe,
+            image=SimpleUploadedFile("gallery.jpg", b"fake-image", content_type="image/jpeg"),
+            caption="Hero",
+            order=1,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("recipes:update", kwargs={"slug": self.recipe.slug}),
+            {
+                **self._edit_post_data(title="Sunday Pancakes revised"),
+                **recipe_edit_save_post_ack(mode="new_version"),
+                **photo_formset_post_data([photo]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        original = Recipe.objects.get(pk=self.recipe.pk)
+        new_recipe = original.lineage.versions.order_by("-version_number").first()
+        assert new_recipe is not None
+        self.assertNotEqual(new_recipe.pk, original.pk)
+        self.assertEqual(original.photos.count(), 1)
+        self.assertEqual(original.photos.get().pk, photo.pk)
+        self.assertEqual(new_recipe.photos.count(), 1)
+        copied = new_recipe.photos.get()
+        self.assertNotEqual(copied.pk, photo.pk)
+        self.assertEqual(copied.caption, "Hero")
 
     def test_update_current_version_keeps_same_row(self):
         self.client.force_login(self.owner)

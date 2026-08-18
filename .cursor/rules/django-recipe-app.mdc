@@ -15,3 +15,4 @@ alwaysApply: false
 - Keep `scripts/start-web.sh` as the shared local startup script and container entrypoint for deployed pods.
 - Do not add external recipe scraping/import dependencies without an explicit decision record. URL import uses stdlib fetch plus schema.org JSON-LD parsing (`src/recipes/url_import.py`; see decision 0005). When changing URL import parsing, follow `.cursor/rules/url-import-parsing.mdc` and run the relevant pytest modules under `src/recipes/`.
 - Add or update Django tests for invite access, permission behavior, form workflows, and user-facing recipe changes.
+- Recipe gallery saves must treat an existing `ImageField`/`FieldFile` as “keep this photo”. Only `UploadedFile` values are new uploads; clearing the form instance pk on a keep-photo save duplicates the image row.
