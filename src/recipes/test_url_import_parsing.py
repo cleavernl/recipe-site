@@ -12,8 +12,10 @@ import pytest
 from recipes.url_import import (
     collect_article_image_urls,
     collect_import_image_urls,
+    collect_og_image_urls,
     collect_recipe_image_urls,
     draft_form_initial_from_document,
+    extract_html_recipe,
     extract_json_ld_recipes,
     filter_import_tags,
     infer_image_stem_prefix_from_urls,
@@ -21,6 +23,7 @@ from recipes.url_import import (
     is_public_ip,
     normalize_import_tag_label,
     normalize_instruction_text,
+    parse_human_duration_minutes,
     parse_import_tags,
     parse_ingredient_entry,
     parse_instructions,
@@ -91,6 +94,114 @@ GRAPH_RECIPE_HTML = """
 </head><body></body></html>
 """
 
+# Pioneer Sugar–style Elementor markup (section + paragraph instructions).
+PIONEER_SECTION_HTML = """
+<!doctype html>
+<html>
+<head>
+  <meta name="description" content="Loaded nachos with squash and chicken."/>
+  <meta property="og:image" content="https://example.com/wp-content/uploads/2026/07/nachos-hero.png"/>
+  <title>Autumn Harvest Nachos - Pioneer Sugar</title>
+</head>
+<body>
+  <h1 class="elementor-heading-title">Autumn Harvest Nachos with Spicy Chicken</h1>
+  <ul class="elementor-icon-list-items">
+    <li><span class="elementor-icon-list-text">35 Minutes</span></li>
+    <li><span class="elementor-icon-list-text">1 Hour 20 Minutes</span></li>
+    <li><span class="elementor-icon-list-text">6–8 Persons</span></li>
+    <li><span class="elementor-icon-list-text">High-Protein</span></li>
+  </ul>
+  <h2 class="elementor-heading-title">Ingredients:</h2>
+  <h3 class="ingredients-section-title">Cheese Blend</h3>
+  <ul class="ingredients-list">
+    <li><label><input type="checkbox" class="ingredient-checkbox">
+      <span class="ingredient-text">10 oz Fontina Cheese, grated</span></label></li>
+    <li><label><input type="checkbox" class="ingredient-checkbox">
+      <span class="ingredient-text">8 oz Havarti Cheese, grated</span></label></li>
+  </ul>
+  <h3 class="ingredients-section-title">Spice Mix</h3>
+  <ul class="ingredients-list">
+    <li><label><input type="checkbox" class="ingredient-checkbox">
+      <span class="ingredient-text">1 tbsp fresh Thyme, minced</span></label></li>
+  </ul>
+  <h2 class="elementor-heading-title">Nutritional Information</h2>
+  <p>Looking for a fresh take on classic nachos? These Nachos with Spicy Chicken
+  combine layers of crispy tortilla chips and roasted squash.</p>
+  <h2 class="elementor-heading-title">Instructions:</h2>
+  <h3>Prepare the Cheese &amp; Spice Blend</h3>
+  <p><strong>Preheat the Oven:</strong><br />Preheat the oven to 350°F (175°C). Combine the cheeses.</p>
+  <h3>Assemble &amp; Bake</h3>
+  <p><strong>Layer the Nachos:</strong><br />Arrange chips, cheese, and filling.</p>
+  <p><strong>Bake &amp; Serve:</strong><br />Bake until the cheese is melted.</p>
+  <h2 class="elementor-heading-title">Cook’s Note:</h2>
+  <p>Assemble just before baking to keep chips crisp.</p>
+  <img src="https://example.com/wp-content/uploads/2026/07/nachos-hero.png">
+  <img src="https://example.com/wp-content/uploads/2026/07/nachos-hero-plated.jpg">
+</body>
+</html>
+"""
+
+# Pioneer Sugar–style Elementor markup (ordered-list instructions).
+PIONEER_OL_HTML = """
+<!doctype html>
+<html>
+<head>
+  <meta property="og:image" content="https://example.com/wp-content/uploads/2020/08/cookies.jpg"/>
+  <title>Soft Molasses Sugar Cookies - Pioneer Sugar</title>
+</head>
+<body>
+  <h1 class="elementor-heading-title">Soft Molasses Sugar Cookies</h1>
+  <ul>
+    <li><span class="elementor-icon-list-text">15 Minutes</span></li>
+    <li><span class="elementor-icon-list-text">10 Minutes, 30 Minutes Chill</span></li>
+    <li><span class="elementor-icon-list-text">24 Cookies</span></li>
+    <li><span class="elementor-icon-list-text">Vegetarian</span></li>
+  </ul>
+  <h2>Ingredients:</h2>
+  <ul class="ingredients-list">
+    <li><span class="ingredient-text">3/4 cup unsalted butter, softened</span></li>
+    <li><span class="ingredient-text">1 cup Pioneer Granulated Sugar</span></li>
+    <li><span class="ingredient-text">1/4 cup unsulphured molasses</span></li>
+  </ul>
+  <p>These molasses sugar cookies bring together the rich sweetness of molasses and warm spices.</p>
+  <h2>Instructions:</h2>
+  <ol>
+    <li><strong>Prepare the dry ingredients:</strong> Whisk flour and spices. Set aside.</li>
+    <li><strong>Cream the butter and sugar:</strong> Beat until light and fluffy.</li>
+    <li><strong>Bake:</strong> Bake for 8 to 10 minutes until crackled.</li>
+  </ol>
+  <h2>Share with your friends :</h2>
+  <p>Share this recipe.</p>
+</body>
+</html>
+"""
+
+BOTH_JSON_LD_AND_HTML = """
+<!doctype html>
+<html>
+<head>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    "name": "JSON-LD Wins",
+    "recipeIngredient": ["1 cup flour"],
+    "recipeInstructions": ["Mix flour."]
+  }
+  </script>
+</head>
+<body>
+  <h1 class="elementor-heading-title">HTML Title Should Lose</h1>
+  <h2>Ingredients:</h2>
+  <ul class="ingredients-list">
+    <li><span class="ingredient-text">2 cups sugar</span></li>
+  </ul>
+  <h2>Instructions:</h2>
+  <ol><li>Ignore this HTML step.</li></ol>
+</body>
+</html>
+"""
+
 DURATION_CASES: list[tuple[str | None, int | None]] = [
     ("PT15M", 15),
     ("PT1H", 60),
@@ -114,6 +225,17 @@ SERVINGS_CASES: list[tuple[object, int | None]] = [
     ("", None),
     (None, None),
     ("no digits here", None),
+]
+
+HUMAN_DURATION_CASES: list[tuple[str | None, int | None]] = [
+    ("35 Minutes", 35),
+    ("1 Hour 20 Minutes", 80),
+    ("10 Minutes, 30 Minutes Chill", 10),
+    ("2 hours", 120),
+    ("", None),
+    (None, None),
+    ("High-Protein", None),
+    ("24 Cookies", None),
 ]
 
 STRIP_HTML_CASES: list[tuple[str, str]] = [
@@ -298,6 +420,14 @@ class TestDurationAndServings:
     def test_parse_iso8601_duration_minutes(self, raw: str | None, expected: int | None) -> None:
         assert parse_iso8601_duration_minutes(raw) == expected
 
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        HUMAN_DURATION_CASES,
+        ids=[str(c[0]) for c in HUMAN_DURATION_CASES],
+    )
+    def test_parse_human_duration_minutes(self, raw: str | None, expected: int | None) -> None:
+        assert parse_human_duration_minutes(raw) == expected
+
     @pytest.mark.parametrize(("raw", "expected"), SERVINGS_CASES, ids=[repr(c[0]) for c in SERVINGS_CASES])
     def test_parse_servings(self, raw: object, expected: int | None) -> None:
         assert parse_servings(raw) == expected
@@ -437,6 +567,64 @@ class TestJsonLdExtraction:
         assert document["cook_time_minutes"] == 40
 
 
+class TestHtmlRecipeFallback:
+    def test_extract_html_recipe_section_instructions(self) -> None:
+        recipe = extract_html_recipe(PIONEER_SECTION_HTML)
+        assert recipe is not None
+        assert recipe["name"] == "Autumn Harvest Nachos with Spicy Chicken"
+        assert recipe["prepTime"] == "PT35M"
+        assert recipe["cookTime"] == "PT80M"
+        assert recipe["recipeYield"] == "6–8 Persons"
+        assert recipe["recipeCategory"] == ["High-Protein"]
+        assert recipe["recipeIngredient"][0] == "Cheese Blend"
+        assert "10 oz Fontina Cheese, grated" in recipe["recipeIngredient"]
+        assert recipe["recipeIngredient"].count("Spice Mix") == 1
+        assert len(recipe["recipeInstructions"]) == 3
+        assert recipe["recipeInstructions"][0].startswith("Preheat the Oven:")
+        assert "350°F" in recipe["recipeInstructions"][0]
+        assert "Looking for a fresh take" in recipe["description"]
+        assert recipe["image"].endswith("nachos-hero.png")
+
+    def test_extract_html_recipe_ordered_list_instructions(self) -> None:
+        recipe = extract_html_recipe(PIONEER_OL_HTML)
+        assert recipe is not None
+        assert recipe["name"] == "Soft Molasses Sugar Cookies"
+        assert recipe["prepTime"] == "PT15M"
+        assert recipe["cookTime"] == "PT10M"
+        assert recipe["recipeYield"] == "24 Cookies"
+        assert recipe["recipeCategory"] == ["Vegetarian"]
+        assert len(recipe["recipeIngredient"]) == 3
+        assert len(recipe["recipeInstructions"]) == 3
+        assert recipe["recipeInstructions"][0].startswith("Prepare the dry ingredients:")
+        assert "Share this recipe" not in " ".join(recipe["recipeInstructions"])
+
+    def test_parse_recipe_html_uses_html_fallback(self) -> None:
+        document = parse_recipe_html(
+            PIONEER_SECTION_HTML,
+            source_url="https://example.com/recipe/nachos/",
+        )
+        assert document["title"] == "Autumn Harvest Nachos with Spicy Chicken"
+        assert document["prep_time_minutes"] == 35
+        assert document["cook_time_minutes"] == 80
+        assert document["servings"] == 6
+        assert document["tags"] == ["High-Protein"]
+        assert document["ingredients"][0]["name"] == "Cheese Blend"
+        assert document["ingredients"][1]["quantity"] == "10 oz"
+        assert len(document["steps"]) == 3
+
+    def test_parse_recipe_html_prefers_json_ld_over_html(self) -> None:
+        document = parse_recipe_html(
+            BOTH_JSON_LD_AND_HTML,
+            source_url="https://example.com/both/",
+        )
+        assert document["title"] == "JSON-LD Wins"
+        assert document["ingredients"][0]["name"] == "flour"
+        assert document["steps"] == ["Mix flour."]
+
+    def test_extract_html_recipe_requires_markers(self) -> None:
+        assert extract_html_recipe("<html><body><p>No recipe</p></body></html>") is None
+
+
 class TestDraftFormInitial:
     def test_draft_form_initial_from_document_shapes_formsets(self) -> None:
         document = parse_recipe_html(SAMPLE_RECIPE_HTML, source_url="https://example.com/chili")
@@ -497,6 +685,23 @@ class TestImageImportParsing:
         """
         urls = collect_article_image_urls(html, page_url="https://example.com/post")
         assert urls == ["https://example.com/wp-content/uploads/hero.jpg"]
+
+    def test_collect_og_image_urls(self) -> None:
+        assert collect_og_image_urls(PIONEER_SECTION_HTML) == [
+            "https://example.com/wp-content/uploads/2026/07/nachos-hero.png",
+        ]
+
+    def test_collect_import_image_urls_seeds_from_og_image_without_schema(self) -> None:
+        recipe = extract_html_recipe(PIONEER_SECTION_HTML)
+        assert recipe is not None
+        selected = collect_import_image_urls(
+            recipe,
+            PIONEER_SECTION_HTML,
+            page_url="https://example.com/recipe/nachos/",
+            max_photos=2,
+        )
+        assert "https://example.com/wp-content/uploads/2026/07/nachos-hero.png" in selected
+        assert "https://example.com/wp-content/uploads/2026/07/nachos-hero-plated.jpg" in selected
 
     def test_infer_image_stem_prefix_from_urls(self) -> None:
         urls = [

@@ -17,7 +17,7 @@ Recipe URL import logic lives in `src/recipes/url_import.py`. Parsing is split i
 uv run pytest src/recipes/test_ingredient_parsing.py -q
 ```
 
-3. **All other import parsing** (instructions, tags, JSON-LD, servings/duration, images, URL validation, document shape):
+3. **All other import parsing** (instructions, tags, JSON-LD, HTML fallback, servings/duration, images, URL validation, document shape):
 
 ```bash
 uv run pytest src/recipes/test_url_import_parsing.py -q
@@ -34,10 +34,11 @@ Run all three when touching shared helpers in `url_import.py`. Do not claim work
 ## When changing parsing rules
 
 - Add parametrized cases to the narrowest test file for the behavior you changed.
-- Prefer real strings from failing site imports (Half Baked Harvest numbered steps, RecipeTin parens, Feasting at Home tags) over synthetic-only examples.
+- Prefer real strings from failing site imports (Half Baked Harvest numbered steps, RecipeTin parens, Feasting at Home tags, Pioneer Sugar Elementor HTML) over synthetic-only examples.
 - Ingredient cases: assert `name` has no stray `(` or `)` when notes were parenthetical.
 - Instruction cases: cover separate `HowToStep` lists, `HowToSection`, single-string instructions, and numbered blobs (`1. … 2. …` with `\u00a0`).
 - Tag cases: `parse_import_tags` must ignore `keywords`; cover `recipeCategory` / `recipeCuisine` only.
+- HTML fallback (`extract_html_recipe`): detect `ingredient-text` + `Ingredients:` heading; cover section+`p` and `ol`/`li` instruction shapes; JSON-LD must still win when both exist; photo seeding may use `og:image` when schema images are absent.
 
 ## Related context
 

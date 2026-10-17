@@ -44,6 +44,20 @@ ARTICLE_IMAGE_SKIP_PATH_RE = re.compile(
 )
 
 DURATION_RE = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", re.IGNORECASE)
+HUMAN_HOURS_RE = re.compile(r"(\d+)\s*hours?", re.IGNORECASE)
+HUMAN_MINUTES_RE = re.compile(r"(\d+)\s*min(?:ute)?s?", re.IGNORECASE)
+HUMAN_TIME_TOKEN_RE = re.compile(r"\b(?:hours?|min(?:ute)?s?)\b", re.IGNORECASE)
+SERVINGS_META_RE = re.compile(
+    r"\b(?:persons?|servings?|serves|cookies?|yield|makes)\b",
+    re.IGNORECASE,
+)
+INGREDIENTS_HEADING_RE = re.compile(r"^ingredients:?$", re.IGNORECASE)
+INSTRUCTIONS_HEADING_RE = re.compile(r"^instructions?:?$", re.IGNORECASE)
+INSTRUCTION_STOP_HEADING_RE = re.compile(
+    r"^(?:cook[’']?s?\s+note|nutritional|share with|recipes you may like|"
+    r"this recipe uses|join the|follow us|quick links|newsletter)",
+    re.IGNORECASE,
+)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 FRACTION_CHARS = "¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞"
 QUANTITY_TOKEN_RE = re.compile(
@@ -158,6 +172,34 @@ def parse_iso8601_duration_minutes(value: Any) -> int | None:
     seconds = int(match.group(3) or 0)
     total = hours * 60 + minutes + (1 if seconds >= 30 else 0)
     return total if total > 0 else None
+
+
+def parse_human_duration_minutes(value: Any) -> int | None:
+    """Parse '35 Minutes' / '1 Hour 20 Minutes'; first comma segment only."""
+    if value is None or value == "":
+        return None
+    text = " ".join(str(value).split()).strip()
+    if not text:
+        return None
+    primary = text.split(",")[0].strip()
+    if not HUMAN_TIME_TOKEN_RE.search(primary):
+        if not HUMAN_TIME_TOKEN_RE.search(text):
+            return None
+        primary = text
+    hours = 0
+    minutes = 0
+    hour_match = HUMAN_HOURS_RE.search(primary)
+    if hour_match:
+        hours = int(hour_match.group(1))
+    minute_match = HUMAN_MINUTES_RE.search(primary)
+    if minute_match:
+        minutes = int(minute_match.group(1))
+    total = hours * 60 + minutes
+    return total if total > 0 else None
+
+
+def minutes_to_iso8601_duration(minutes: int) -> str:
+    return f"PT{minutes}M"
 
 
 def parse_servings(value: Any) -> int | None:
@@ -642,6 +684,244 @@ def extract_json_ld_recipes(html: str) -> list[dict[str, Any]]:
     return recipes
 
 
+class HtmlRecipeExtractor(HTMLParser):
+    """Extract Pioneer Sugar–style Elementor recipe markup (no JSON-LD)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.title = ""
+        self.meta_description = ""
+        self.og_image = ""
+        self.document_title = ""
+        self.meta_texts: list[str] = []
+        self.ingredients: list[str] = []
+        self.ingredient_lines = 0
+        self.steps: list[str] = []
+        self.description_candidates: list[str] = []
+        self.saw_ingredients_heading = False
+        self.saw_instructions_heading = False
+        self._phase = "pre"
+        self._capture: str | None = None
+        self._capture_tag: str | None = None
+        self._capture_depth = 0
+        self._buffer: list[str] = []
+        self._heading_classes: set[str] = set()
+
+    def _attrs_dict(self, attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+        return {key: value for key, value in attrs if key and value is not None}
+
+    def _class_set(self, attrs: list[tuple[str, str | None]]) -> set[str]:
+        return {part for part in self._attrs_dict(attrs).get("class", "").split() if part}
+
+    def _start_capture(self, kind: str, tag: str) -> None:
+        self._capture = kind
+        self._capture_tag = tag
+        self._capture_depth = 1
+        self._buffer = []
+
+    def _emit_capture(self) -> None:
+        kind = self._capture or ""
+        text = " ".join("".join(self._buffer).split()).strip()
+        self._capture = None
+        self._capture_tag = None
+        self._capture_depth = 0
+        self._buffer = []
+        if not text:
+            return
+        if kind.startswith("heading:"):
+            self._handle_heading(kind.split(":", 1)[1], text, self._heading_classes)
+        elif kind == "ingredient":
+            self.ingredients.append(text)
+            self.ingredient_lines += 1
+        elif kind == "meta":
+            self.meta_texts.append(text)
+        elif kind == "step" and self._phase == "instructions":
+            self.steps.append(text)
+        elif kind == "description" and self._phase in {"pre", "ingredients"} and len(text) >= 40:
+            self.description_candidates.append(text)
+        elif kind == "document_title" and not self.document_title:
+            self.document_title = text
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = self._attrs_dict(attrs)
+        classes = self._class_set(attrs)
+
+        if tag == "meta":
+            name = (attrs_dict.get("name") or "").casefold()
+            prop = (attrs_dict.get("property") or "").casefold()
+            content = attrs_dict.get("content") or ""
+            if name == "description" and content and not self.meta_description:
+                self.meta_description = content.strip()
+            if prop == "og:image" and content and not self.og_image:
+                self.og_image = content.strip()
+            return
+
+        if self._capture:
+            if tag == self._capture_tag:
+                self._capture_depth += 1
+            elif tag == "br":
+                self._buffer.append(" ")
+            return
+
+        if tag == "title" and not self.document_title:
+            self._start_capture("document_title", tag)
+            return
+
+        if tag in {"h1", "h2", "h3"}:
+            self._heading_classes = classes
+            self._start_capture(f"heading:{tag}", tag)
+            return
+
+        if tag == "span" and "ingredient-text" in classes and self._phase == "ingredients":
+            self._start_capture("ingredient", tag)
+            return
+
+        if tag == "span" and "elementor-icon-list-text" in classes and self._phase == "pre":
+            self._start_capture("meta", tag)
+            return
+
+        if tag in {"p", "li"} and self._phase == "instructions":
+            self._start_capture("step", tag)
+            return
+
+        # Description often sits after ingredients (e.g. before Instructions).
+        if tag == "p" and self._phase in {"pre", "ingredients"}:
+            self._start_capture("description", tag)
+            return
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._capture or tag != self._capture_tag:
+            return
+        self._capture_depth -= 1
+        if self._capture_depth <= 0:
+            self._emit_capture()
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._capture and tag == "br":
+            self._buffer.append(" ")
+            return
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self._capture:
+            self._buffer.append(data)
+
+    def _handle_heading(self, tag: str, text: str, classes: set[str]) -> None:
+        cleaned = text.strip()
+        if not cleaned:
+            return
+        if tag == "h1" and not self.title:
+            if "elementor-heading-title" in classes or not self.title:
+                self.title = cleaned
+            return
+        if INGREDIENTS_HEADING_RE.match(cleaned):
+            self.saw_ingredients_heading = True
+            self._phase = "ingredients"
+            return
+        if INSTRUCTIONS_HEADING_RE.match(cleaned):
+            self.saw_instructions_heading = True
+            self._phase = "instructions"
+            return
+        if self._phase == "instructions" and INSTRUCTION_STOP_HEADING_RE.match(cleaned):
+            self._phase = "done"
+            return
+        if (
+            self._phase == "ingredients"
+            and tag == "h3"
+            and "ingredients-section-title" in classes
+            and cleaned
+        ):
+            self.ingredients.append(cleaned)
+
+
+def _classify_html_meta_texts(
+    meta_texts: list[str],
+) -> tuple[int | None, int | None, str | None, list[str]]:
+    times: list[int] = []
+    servings_text: str | None = None
+    categories: list[str] = []
+    for raw in meta_texts:
+        text = " ".join(strip_html(raw).split()).strip()
+        if not text:
+            continue
+        # Footer / address noise
+        if any(
+            marker in text.casefold()
+            for marker in ("headquarters", "phone:", "uptown", "monday through")
+        ):
+            continue
+        duration = parse_human_duration_minutes(text)
+        if duration is not None and HUMAN_TIME_TOKEN_RE.search(text.split(",")[0]):
+            times.append(duration)
+            continue
+        if servings_text is None and SERVINGS_META_RE.search(text) and re.search(r"\d", text):
+            servings_text = text
+            continue
+        if len(text) <= IMPORT_TAG_MAX_LENGTH and len(text.split()) <= IMPORT_TAG_MAX_WORDS:
+            categories.append(text)
+    prep = times[0] if times else None
+    cook = times[1] if len(times) > 1 else None
+    return prep, cook, servings_text, categories
+
+
+def extract_html_recipe(html: str) -> dict[str, Any] | None:
+    """Build a schema.org-shaped Recipe dict from Elementor-style HTML markup."""
+    if "ingredient-text" not in html:
+        return None
+    parser = HtmlRecipeExtractor()
+    parser.feed(html)
+    if not parser.saw_ingredients_heading or parser.ingredient_lines < 1:
+        return None
+
+    title = parser.title.strip()
+    if not title and parser.document_title:
+        title = re.sub(r"\s+[-|].*$", "", parser.document_title).strip()
+    if not title:
+        return None
+
+    description = ""
+    if parser.description_candidates:
+        description = parser.description_candidates[0]
+    elif parser.meta_description:
+        description = parser.meta_description.strip()
+
+    prep_minutes, cook_minutes, yield_text, categories = _classify_html_meta_texts(
+        parser.meta_texts,
+    )
+
+    recipe: dict[str, Any] = {
+        "@type": "Recipe",
+        "name": title,
+        "description": description,
+        "recipeIngredient": list(parser.ingredients),
+        "recipeInstructions": list(parser.steps),
+    }
+    if prep_minutes is not None:
+        recipe["prepTime"] = minutes_to_iso8601_duration(prep_minutes)
+    if cook_minutes is not None:
+        recipe["cookTime"] = minutes_to_iso8601_duration(cook_minutes)
+    if yield_text:
+        recipe["recipeYield"] = yield_text
+    if categories:
+        recipe["recipeCategory"] = categories
+    if parser.og_image:
+        recipe["image"] = parser.og_image
+    return recipe
+
+
+def resolve_recipe_object(html: str) -> dict[str, Any]:
+    """Prefer JSON-LD Recipe; fall back to HTML heuristics."""
+    recipes = extract_json_ld_recipes(html)
+    if recipes:
+        return recipes[0]
+    html_recipe = extract_html_recipe(html)
+    if html_recipe:
+        return html_recipe
+    msg = "No recipe data was found on that page."
+    raise RecipeImportError(msg)
+
+
 def is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return not (
         address.is_private
@@ -858,6 +1138,28 @@ def collect_article_image_urls(html: str, *, page_url: str) -> list[str]:
     return urls
 
 
+OG_IMAGE_RE = re.compile(
+    r"""<meta[^>]+property=["']og:image["'][^>]+content=["'](https?://[^"']+)["']"""
+    r"""|<meta[^>]+content=["'](https?://[^"']+)["'][^>]+property=["']og:image["']""",
+    re.IGNORECASE,
+)
+
+
+def collect_og_image_urls(html: str) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for match in OG_IMAGE_RE.finditer(html):
+        url = (match.group(1) or match.group(2) or "").strip()
+        if not url:
+            continue
+        key = url.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        urls.append(url)
+    return urls
+
+
 def collect_import_image_urls(
     recipe: dict[str, Any],
     html: str,
@@ -865,12 +1167,19 @@ def collect_import_image_urls(
     page_url: str,
     max_photos: int = MAX_IMPORT_PHOTOS,
 ) -> list[str]:
-    """JSON-LD recipe images plus distinct in-article photos (not size variants)."""
+    """JSON-LD / og:image heroes plus distinct in-article photos (not size variants)."""
     schema_urls = collect_recipe_image_urls(recipe)
+    og_urls = collect_og_image_urls(html) if html.strip() else []
     candidates = [(_image_url_rank(url, from_recipe_schema=True), url) for url in schema_urls]
+    schema_keys = {url.casefold() for url in schema_urls}
+    for url in og_urls:
+        if url.casefold() in schema_keys:
+            continue
+        candidates.append((_image_url_rank(url, from_recipe_schema=True), url))
 
+    seed_urls = schema_urls or og_urls
     if html.strip():
-        prefix = infer_image_stem_prefix_from_urls(schema_urls)
+        prefix = infer_image_stem_prefix_from_urls(seed_urls)
         for url in collect_article_image_urls(html, page_url=page_url):
             if prefix and prefix not in _image_url_dedupe_key(url):
                 continue
@@ -1048,11 +1357,8 @@ def recipe_object_to_document(recipe: dict[str, Any], *, source_url: str) -> dic
 
 
 def parse_recipe_html(html: str, *, source_url: str) -> dict[str, Any]:
-    recipes = extract_json_ld_recipes(html)
-    if not recipes:
-        msg = "No recipe data was found on that page."
-        raise RecipeImportError(msg)
-    document = recipe_object_to_document(recipes[0], source_url=source_url)
+    recipe = resolve_recipe_object(html)
+    document = recipe_object_to_document(recipe, source_url=source_url)
     return validate_recipe_document(document, path=Path("url-import"))
 
 
@@ -1063,15 +1369,12 @@ def fetch_and_parse_recipe_url(
 ) -> dict[str, Any]:
     safe_url = validate_fetch_url(url)
     html = fetch_url_text(safe_url)
-    recipes = extract_json_ld_recipes(html)
-    if not recipes:
-        msg = "No recipe data was found on that page."
-        raise RecipeImportError(msg)
-    document = recipe_object_to_document(recipes[0], source_url=safe_url)
+    recipe = resolve_recipe_object(html)
+    document = recipe_object_to_document(recipe, source_url=safe_url)
     document = validate_recipe_document(document, path=Path("url-import"))
     if stage_photos_token:
         document["staged_photos"] = stage_recipe_photos(
-            recipes[0],
+            recipe,
             referer=safe_url,
             token=stage_photos_token,
             html=html,
